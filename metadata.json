@@ -1,0 +1,8 @@
+{
+  "name": "НавиКрым - Travel & Stay Platform",
+  "description": "Geo-centric platform for booking stays and planning routes in Crimea with iCal synchronization and PostGIS-ready architecture.",
+  "requestFramePermissions": [
+    "geolocation",
+    "microphone"
+  ]
+}
