@@ -1,9 +1,98 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import Database from "better-sqlite3";
-import path from "path";
 
 const db = new Database("platform.db");
+
+const discoveryContent = {
+  routes: [
+    {
+      id: "route-bolshaya-sevastopolskaya",
+      title: "Большая севастопольская прогулка",
+      category: "Маршрут",
+      source: "НавиКрым Guide",
+      summary: "Дневной маршрут по набережной, Графской пристани, Херсонесу и Балаклаве с точками для остановок и фото.",
+      details: "Подходит для первого знакомства с городом. Лучше стартовать утром, чтобы успеть захватить музейную часть Херсонеса и вечерний вид на Балаклавскую бухту.",
+      url: "https://travel.example/crimea/sevastopol-walk",
+    },
+    {
+      id: "route-fiolent",
+      title: "Фиолент и Яшмовый пляж",
+      category: "Природа",
+      source: "НавиКрым Guide",
+      summary: "Маршрут к смотровым площадкам Фиолента, монастырю и спуску к Яшмовому пляжу.",
+      details: "Нужна удобная обувь и запас воды. Спуск длинный, поэтому это хороший вариант для полудневной поездки с акцентом на море и панорамы.",
+      url: "https://travel.example/crimea/fiolent-jasper",
+    },
+    {
+      id: "route-sudak-novy-svet",
+      title: "Судак и тропа Голицына",
+      category: "Треккинг",
+      source: "НавиКрым Guide",
+      summary: "Связка Генуэзской крепости, набережной Судака и тропы Голицына в Новом Свете.",
+      details: "Лучше планировать на целый день. Утром крепость, после обеда переезд в Новый Свет и прогулка по тропе вдоль бухт.",
+      url: "https://travel.example/crimea/sudak-novy-svet",
+    },
+  ],
+  experiences: [
+    {
+      id: "exp-yalta-gastro",
+      title: "Гастро-вечер в Ялте",
+      category: "Впечатление",
+      source: "НавиКрым Picks",
+      summary: "Подборка мест для вечерней прогулки, локальной кухни и видов на набережной Ялты.",
+      details: "Подойдет для неспешного вечера: поздний завтрак, прогулка по центру, ужин у моря и финальная остановка на смотровой точке.",
+      url: "https://travel.example/crimea/yalta-evening",
+    },
+    {
+      id: "exp-bakhchisaray",
+      title: "День в Бахчисарае",
+      category: "Культура",
+      source: "НавиКрым Picks",
+      summary: "Ханский дворец, старый город, кофейни и окрестные пещерные локации в одном сценарии.",
+      details: "Хороший вариант для культурной программы с умеренной нагрузкой. Стоит заложить время на прогулку по старым кварталам и панорамам в окрестностях.",
+      url: "https://travel.example/crimea/bakhchisaray-day",
+    },
+    {
+      id: "exp-koktebel",
+      title: "Коктебель: море и арт-среда",
+      category: "Отдых",
+      source: "НавиКрым Picks",
+      summary: "Сценарий для пляжного дня с музыкальными площадками, прогулкой по побережью и закатной точкой.",
+      details: "Удобно для летнего отдыха без сложной логистики. Основной акцент на атмосфере, пляже и вечернем маршруте вдоль моря.",
+      url: "https://travel.example/crimea/koktebel-seaside",
+    },
+  ],
+  safety: [
+    {
+      id: "safe-weather",
+      title: "Погода и жара перед поездкой",
+      category: "Безопасность",
+      source: "НавиКрым Advisory",
+      summary: "Перед выездом проверяйте температуру, силу ветра и штормовые предупреждения по нужному району Крыма.",
+      details: "Для пеших маршрутов и пляжных дней критично смотреть не только общую температуру, но и ветер, осадки и ультрафиолетовый индекс.",
+      url: "https://travel.example/crimea/weather-safety",
+    },
+    {
+      id: "safe-roads",
+      title: "Дороги и время в пути",
+      category: "Логистика",
+      source: "НавиКрым Advisory",
+      summary: "Закладывайте запас времени на горные участки, серпантины и сезонную загруженность подъездов к пляжам.",
+      details: "Лучше выезжать рано утром и иметь офлайн-карту. На популярных направлениях время в пути может заметно вырасти в выходные и праздники.",
+      url: "https://travel.example/crimea/road-safety",
+    },
+    {
+      id: "safe-hiking",
+      title: "Безопасность на тропах",
+      category: "Трекинг",
+      source: "НавиКрым Advisory",
+      summary: "Для троп и смотровых маршрутов нужны вода, нескользящая обувь и расчет времени до заката.",
+      details: "На каменистых участках и обрывах не стоит идти без базовой подготовки. Если маршрут новый, лучше выбирать популярные направления с понятной тропой.",
+      url: "https://travel.example/crimea/trail-safety",
+    },
+  ],
+} as const;
 
 // Initialize Database Schema
 db.exec(`
@@ -119,6 +208,17 @@ async function startServer() {
   app.post("/api/v1/objects/:id/sync", (req, res) => {
     // In a real app, this would fetch the URL and parse iCal
     res.json({ status: "success", message: "Calendar synchronized with external provider" });
+  });
+
+  app.get("/api/v1/discovery/:section", (req, res) => {
+    const section = req.params.section as keyof typeof discoveryContent;
+    const items = discoveryContent[section];
+
+    if (!items) {
+      return res.status(404).json({ error: "Section not found" });
+    }
+
+    res.json(items);
   });
 
   if (process.env.NODE_ENV !== "production") {

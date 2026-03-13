@@ -1,20 +1,49 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# NaviCrimea
 
-# Run and deploy your AI Studio app
+Локальное приложение для просмотра объектов размещения в Крыму.
 
-This contains everything you need to run your app locally.
+Проект состоит из:
+- React + Vite фронтенда
+- Express backend-сервера
+- SQLite базы данных, которая создается автоматически при первом запуске
 
-View your app in AI Studio: https://ai.studio/apps/6c30bb44-4a8e-4fb9-ad89-25eaba857637
+## Требования
 
-## Run Locally
+- Node.js 22 LTS или новее
+- npm
 
-**Prerequisites:**  Node.js
+## Локальный запуск
 
-
-1. Install dependencies:
+1. Откройте терминал в папке проекта:
+   `C:\CODEX\navicrimea`
+2. Установите зависимости:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+3. Запустите приложение в режиме разработки:
    `npm run dev`
+4. Откройте в браузере:
+   `http://localhost:3000`
+
+Сервер поднимается на порту `3000` и в dev-режиме отдает Vite-приложение через middleware.
+
+## Полезные команды
+
+- `npm run dev` - запуск приложения в режиме разработки
+- `npm run start` - запуск сервера через `tsx`
+- `npm run build` - сборка фронтенда через Vite
+- `npm run preview` - предпросмотр production-сборки фронтенда
+- `npm run lint` - проверка TypeScript без генерации файлов
+- `npm run clean` - удаление папки `dist` в PowerShell
+
+## База данных
+
+При первом запуске создается файл `platform.db`.
+
+В базу автоматически добавляются тестовые данные:
+- один владелец
+- три объекта размещения
+
+## Переменные окружения
+
+Для текущей версии приложения обязательные переменные окружения для локального запуска не требуются.
+
+Файл `.env.example` оставлен как шаблон под возможную будущую интеграцию.
