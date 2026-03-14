@@ -1,8 +1,13 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import Database from "better-sqlite3";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const db = new Database("platform.db");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const distDir = path.join(__dirname, "dist");
 
 const discoveryContent = {
   routes: [
@@ -146,7 +151,7 @@ if (objectCount.count === 0) {
     "Роскошный отдых в самом сердце Ялты с панорамным видом на море.", 
     44.4952, 34.1663, 
     15000, 
-    "https://picsum.photos/seed/villa/800/600", 
+    "/images/stay-villa-elena.svg", 
     ownerId,
     "https://example.com/sync/villa-elena.ics"
   );
@@ -157,7 +162,7 @@ if (objectCount.count === 0) {
     "Тихий экологичный дом рядом со знаменитым Яшмовым пляжем.", 
     44.5007, 33.4833, 
     4500, 
-    "https://picsum.photos/seed/eco/800/600", 
+    "/images/stay-fiolent.svg", 
     ownerId,
     null
   );
@@ -168,7 +173,7 @@ if (objectCount.count === 0) {
     "Современные апартаменты с прямым видом на Генуэзскую крепость.", 
     44.8436, 34.9581, 
     3200, 
-    "https://picsum.photos/seed/sudak/800/600", 
+    "/images/stay-sudak.svg", 
     ownerId,
     null
   );
@@ -177,7 +182,7 @@ if (objectCount.count === 0) {
 async function startServer() {
   const app = express();
   app.use(express.json());
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT ?? 3000);
 
   // API v1: Objects Search (Geo-Bounds)
   app.get("/api/v1/objects/search", (req, res) => {
@@ -227,6 +232,16 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
+  } else {
+    app.use(express.static(distDir));
+
+    app.get("/{*path}", (req, res, next) => {
+      if (req.path.startsWith("/api/")) {
+        return next();
+      }
+
+      res.sendFile(path.join(distDir, "index.html"));
+    });
   }
 
   app.listen(PORT, "0.0.0.0", () => {

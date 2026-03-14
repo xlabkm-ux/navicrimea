@@ -14,7 +14,6 @@ import {
   Map as MapIcon,
   MapPin,
   Mic,
-  Navigation,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -22,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { YandexCrimeaMap } from './components/YandexCrimeaMap';
 
 interface GeoObject {
   id: number;
@@ -134,13 +134,19 @@ const translations: Record<Language, any> = {
 const fallbackTranslations = translations.ru;
 
 const heroImages = [
-  { url: 'https://picsum.photos/seed/lagoon1/1200/800', title: 'Lagoon 1' },
-  { url: 'https://picsum.photos/seed/lagoon2/1200/800', title: 'Lagoon 2' },
-  { url: 'https://picsum.photos/seed/lagoon3/1200/800', title: 'Lagoon 3' },
-  { url: 'https://picsum.photos/seed/lagoon4/1200/800', title: 'Lagoon 4' },
-  { url: 'https://picsum.photos/seed/museum1/1200/800', title: 'Museum' },
-  { url: 'https://picsum.photos/seed/lagoon5/1200/800', title: 'Lagoon 5' },
+  { url: '/images/hero-coast-1.svg', title: 'Coast 1' },
+  { url: '/images/hero-coast-2.svg', title: 'Coast 2' },
+  { url: '/images/hero-cliff-1.svg', title: 'Cliff 1' },
+  { url: '/images/hero-cliff-2.svg', title: 'Cliff 2' },
+  { url: '/images/hero-palace.svg', title: 'Palace' },
+  { url: '/images/hero-sea-night.svg', title: 'Sea Night' },
 ];
+
+const localStayImages: Record<number, string> = {
+  1: '/images/stay-villa-elena.svg',
+  2: '/images/stay-fiolent.svg',
+  3: '/images/stay-sudak.svg',
+};
 
 const sectionAccents: Record<Section, string> = {
   stays: 'bg-purple-200',
@@ -182,13 +188,6 @@ export default function App() {
     { id: 'experiences', label: t.experiences },
     { id: 'safety', label: t.safety },
   ];
-
-  const bounds = {
-    minLat: 44.3,
-    maxLat: 46.2,
-    minLng: 32.4,
-    maxLng: 36.7,
-  };
 
   useEffect(() => {
     fetchObjects();
@@ -245,12 +244,6 @@ export default function App() {
     );
   }, [currentDiscovery, searchQuery]);
 
-  const getPos = (lat: number, lng: number) => {
-    const x = ((lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 100;
-    const y = 100 - ((lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * 100;
-    return { x, y };
-  };
-
   const handleVoiceSearch = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -272,6 +265,14 @@ export default function App() {
     recognition.onend = () => setIsListening(false);
 
     recognition.start();
+  };
+
+  const getObjectImage = (obj: GeoObject) => {
+    if (obj.image_url?.startsWith('/images/')) {
+      return obj.image_url;
+    }
+
+    return localStayImages[obj.id] ?? '/images/stay-villa-elena.svg';
   };
 
   const renderStaysPanel = () => (
@@ -326,7 +327,7 @@ export default function App() {
                 onClick={() => setSelectedObject(obj)}
               >
                 <div className="aspect-[4/3] overflow-hidden relative">
-                  <img src={obj.image_url} alt={obj.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" />
+                  <img src={getObjectImage(obj)} alt={obj.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   <div className="absolute top-3 right-3 px-3 py-1 bg-white/90 backdrop-blur-sm rounded-full text-[10px] font-bold uppercase tracking-widest">
                     {obj.type}
                   </div>
@@ -352,48 +353,7 @@ export default function App() {
       </div>
 
       <div className="flex-[0.6] bg-purple-200 relative overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
-          <Navigation size={400} className="rotate-45" />
-        </div>
-
-        <svg className="w-full h-full p-20" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <path
-            d="M30,20 L70,20 L85,40 L80,70 L50,90 L20,70 L15,40 Z"
-            fill="none"
-            stroke="black"
-            strokeWidth="0.1"
-            strokeDasharray="1 1"
-            className="opacity-20"
-          />
-
-          {filteredObjects.map((obj) => {
-            const pos = getPos(obj.lat, obj.lng);
-            return (
-              <g key={obj.id} className="cursor-pointer group" onClick={() => setSelectedObject(obj)}>
-                <circle
-                  cx={pos.x}
-                  cy={pos.y}
-                  r={selectedObject?.id === obj.id ? 1.5 : 0.8}
-                  fill={selectedObject?.id === obj.id ? '#1A1A1A' : 'white'}
-                  stroke="#1A1A1A"
-                  strokeWidth="0.2"
-                  className="transition-all duration-300"
-                />
-                {selectedObject?.id === obj.id && (
-                  <circle cx={pos.x} cy={pos.y} r="3" fill="none" stroke="#1A1A1A" strokeWidth="0.1" className="animate-ping" />
-                )}
-              </g>
-            );
-          })}
-        </svg>
-
-        <div className="absolute bottom-8 right-8 flex flex-col gap-2">
-          <div className="bg-white rounded-2xl shadow-xl border border-black/5 p-2 flex flex-col gap-1">
-            <button className="p-3 hover:bg-black/5 rounded-xl transition-colors"><RefreshCw size={20} /></button>
-            <div className="h-px bg-black/5 mx-2" />
-            <button className="p-3 hover:bg-black/5 rounded-xl transition-colors"><Navigation size={20} /></button>
-          </div>
-        </div>
+        <YandexCrimeaMap />
 
         <AnimatePresence>
           {selectedObject && (
