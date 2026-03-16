@@ -852,7 +852,7 @@ export const CompanionFinder = ({ onClose, userProfile: initialProfile }: any) =
       initial={{ opacity: 0, x: 100 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 100 }}
-      className="fixed inset-0 z-[80] bg-[#f5f5f0] flex flex-col"
+      className="relative h-full bg-[#f5f5f0] flex flex-col overflow-hidden"
     >
       <div className="p-4 flex items-center justify-between border-b border-black/5 bg-white">
         <div className="flex items-center gap-3">
@@ -884,7 +884,7 @@ export const CompanionFinder = ({ onClose, userProfile: initialProfile }: any) =
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-purple-600 flex flex-col items-center justify-center text-white p-8 text-center"
+            className="absolute inset-0 z-[100] bg-purple-600 flex flex-col items-center justify-center text-white p-8 text-center"
           >
             <motion.div
               initial={{ scale: 0 }}
@@ -901,7 +901,7 @@ export const CompanionFinder = ({ onClose, userProfile: initialProfile }: any) =
       </AnimatePresence>
 
       {/* In-app Notifications Overlay */}
-      <div className="fixed top-4 right-4 z-[200] space-y-2 pointer-events-none">
+      <div className="absolute top-4 right-4 z-[200] space-y-2 pointer-events-none">
         <AnimatePresence>
           {notifications.map(notification => (
             <motion.div

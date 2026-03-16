@@ -3,6 +3,12 @@ import { Mic, X, MessageSquare, Sparkles, Loader2, Volume2, VolumeX } from 'luci
 import { motion, AnimatePresence } from 'motion/react';
 import { externalAI, AIResponse } from '../services/externalAI';
 
+interface AssistantMessage {
+  id: string;
+  role: 'assistant' | 'user';
+  text: string;
+}
+
 interface ExternalVoiceAssistantProps {
   onAction: (action: any) => void;
   currentContext: any;
@@ -10,6 +16,9 @@ interface ExternalVoiceAssistantProps {
   panelClassName?: string;
   triggerClassName?: string;
   compact?: boolean;
+  showCompactLabel?: boolean;
+  embedded?: boolean;
+  title?: string;
 }
 
 export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
@@ -19,6 +28,9 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
   panelClassName = 'absolute bottom-20 left-0 w-80 bg-white rounded-[32px] shadow-2xl border border-accent-purple/10 overflow-hidden',
   triggerClassName,
   compact = false,
+  showCompactLabel = true,
+  embedded = false,
+  title = 'Алиса (Яндекс)',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -28,6 +40,14 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeechSupported, setIsSpeechSupported] = useState(true);
   const [recordingMode, setRecordingMode] = useState<'ogg' | 'lpcm' | 'unsupported'>('unsupported');
+  const [speechStatus, setSpeechStatus] = useState<'idle' | 'synthesizing' | 'playing' | 'muted' | 'error'>('idle');
+  const [messages, setMessages] = useState<AssistantMessage[]>([
+    {
+      id: 'assistant-welcome',
+      role: 'assistant',
+      text: 'Скажите, что вы хотите найти: отель, апартаменты, маршрут или спокойный отдых у моря.',
+    },
+  ]);
   
   const transcriptRef = useRef('');
   const shouldProcessRef = useRef(false);
@@ -41,6 +61,7 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
   const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
   const pcmChunksRef = useRef<Float32Array[]>([]);
   const pcmSampleRateRef = useRef<number>(48000);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const supportsOggRecording =
@@ -77,6 +98,11 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
     };
   }, []);
 
+  useEffect(() => {
+    if (!messagesContainerRef.current) return;
+    messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+  }, [messages, isProcessing, transcript, lastResponse]);
+
   const stopAudioPlayback = () => {
     audioRef.current?.pause();
     audioRef.current = null;
@@ -84,6 +110,7 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
       URL.revokeObjectURL(audioUrlRef.current);
       audioUrlRef.current = null;
     }
+    setSpeechStatus(isMuted ? 'muted' : 'idle');
   };
 
   const stopRecordingStream = () => {
@@ -322,11 +349,32 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
 
   const handleProcessInput = async (text: string) => {
     try {
-      const response: AIResponse = await externalAI.processVoiceInput(text, currentContext);
-      setLastResponse(response.text);
+      if (isMuted) {
+        setSpeechStatus('muted');
+      } else {
+        setSpeechStatus('idle');
+      }
+      const conversation = messages.slice(-12).map((item) => ({
+        role: item.role,
+        text: item.text,
+      }));
+      setMessages((prev) => [
+        ...prev,
+        { id: `user-${Date.now()}`, role: 'user', text },
+      ]);
+      const response: AIResponse = await externalAI.processVoiceInput(text, {
+        ...currentContext,
+        conversation,
+      });
+      const assistantText = response.text?.trim() || 'Я подобрала варианты и вывела результаты ниже.';
+      setLastResponse(assistantText);
+      setMessages((prev) => [
+        ...prev,
+        { id: `assistant-${Date.now()}`, role: 'assistant', text: assistantText },
+      ]);
       
-      if (!isMuted && response.text) {
-        await speak(response.text);
+      if (!isMuted && assistantText) {
+        await speak(assistantText);
       }
 
       if (response.actions) {
@@ -339,85 +387,128 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
 
   const speak = async (text: string) => {
     try {
+      setSpeechStatus('synthesizing');
       stopAudioPlayback();
       const audioUrl = await externalAI.synthesizeSpeech(text);
-      if (!audioUrl) return;
+      if (!audioUrl) {
+        setSpeechStatus('error');
+        return;
+      }
       audioUrlRef.current = audioUrl;
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
+      audio.onplay = () => {
+        setSpeechStatus('playing');
+      };
       audio.onended = () => {
         stopAudioPlayback();
+      };
+      audio.onerror = () => {
+        setSpeechStatus('error');
       };
       await audio.play();
     } catch (error) {
       console.error('SpeechKit TTS error', error);
       setLastResponse('Ответ получен, но озвучить его через SpeechKit не удалось.');
+      setSpeechStatus('error');
     }
   };
+
+  const speechStatusLabel = (() => {
+    if (isMuted) return 'Звук выключен';
+    if (speechStatus === 'synthesizing') return 'Озвучка: синтезирую ответ...';
+    if (speechStatus === 'playing') return 'Озвучка: воспроизвожу ответ';
+    if (speechStatus === 'error') return 'Озвучка: ошибка воспроизведения';
+    return 'Озвучка: готова';
+  })();
 
   return (
     <div className={containerClassName}>
       <AnimatePresence>
-        {isOpen && (
+        {(embedded || isOpen) && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            exit={embedded ? undefined : { opacity: 0, scale: 0.9, y: 20 }}
             className={panelClassName}
           >
             <div className="p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-accent-purple rounded-full animate-pulse" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">Алиса (Яндекс)</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">{title}</span>
                 </div>
-                <button onClick={() => setIsOpen(false)} className="opacity-20 hover:opacity-100 transition-opacity">
-                  <X size={16} />
-                </button>
+                {!embedded && (
+                  <button onClick={() => setIsOpen(false)} className="opacity-20 hover:opacity-100 transition-opacity">
+                    <X size={16} />
+                  </button>
+                )}
               </div>
 
-              <div className="min-h-[100px] flex flex-col justify-center">
+              <div ref={messagesContainerRef} className="min-h-[220px] max-h-[420px] overflow-y-auto custom-scrollbar pr-1">
                 {isProcessing ? (
                   <div className="flex flex-col items-center gap-3 py-4">
                     <Loader2 className="animate-spin text-accent-purple" size={32} />
                     <p className="text-xs font-medium opacity-40">Анализирую ваши мысли...</p>
                   </div>
-                ) : lastResponse ? (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="space-y-3"
-                  >
-                    <p className="text-sm leading-relaxed text-gray-800 font-medium italic">
-                      "{lastResponse}"
-                    </p>
-                    <div className="flex justify-end">
-                      <button 
-                        onClick={() => {
-                          if (!isMuted) {
-                            stopAudioPlayback();
-                          }
-                          setIsMuted(!isMuted);
-                        }}
-                        className="p-2 hover:bg-accent-purple/5 rounded-full transition-colors opacity-40 hover:opacity-100"
-                      >
-                        {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                      </button>
-                    </div>
-                  </motion.div>
                 ) : (
-                  <div className="text-center space-y-2">
-                    <p className="text-sm opacity-60">
-                      {isSpeechSupported
-                        ? `Нажмите на микрофон и скажите короткий запрос. Голос обрабатывается через SpeechKit и YandexGPT${recordingMode === 'lpcm' ? ' в режиме совместимости' : ''}.`
-                        : 'Для голосового режима нужен браузер с доступом к микрофону и Web Audio API.'}
-                    </p>
-                    <p className="text-[10px] uppercase tracking-widest opacity-30 font-bold">Например: "Хочу тихий отель в горах с видом на море"</p>
+                  <div className="space-y-3">
+                    {messages.map((message) => (
+                      <motion.div
+                        key={message.id}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`max-w-[85%] rounded-[24px] px-4 py-3 text-sm leading-relaxed shadow-sm ${
+                            message.role === 'user'
+                              ? 'bg-accent-purple text-white'
+                              : 'bg-white border border-accent-purple/10 text-gray-800'
+                          }`}
+                        >
+                          {message.text}
+                        </div>
+                      </motion.div>
+                    ))}
+                    {!isSpeechSupported && (
+                      <div className="text-center space-y-2 pt-2">
+                        <p className="text-sm opacity-60">Для голосового режима нужен браузер с доступом к микрофону и Web Audio API.</p>
+                      </div>
+                    )}
+                    {lastResponse && (
+                      <div className="text-center pt-1">
+                        <p className="text-[11px] opacity-55">{lastResponse}</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              {transcript && (
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[10px] uppercase tracking-widest opacity-30 font-bold">
+                  Например: "Хочу тихий отель в горах с видом на море"
+                </div>
+                <button 
+                  onClick={() => {
+                    if (!isMuted) {
+                      stopAudioPlayback();
+                    }
+                    const nextMuted = !isMuted;
+                    setIsMuted(nextMuted);
+                    setSpeechStatus(nextMuted ? 'muted' : 'idle');
+                  }}
+                  className="p-2 hover:bg-accent-purple/5 rounded-full transition-colors opacity-40 hover:opacity-100 shrink-0"
+                >
+                  {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                </button>
+              </div>
+
+              <div className="text-[10px] font-bold uppercase tracking-widest opacity-50">
+                {speechStatusLabel}
+              </div>
+
+              {transcript && isListening && (
                 <div className="p-3 bg-peach-bg rounded-2xl border border-accent-purple/5">
                   <p className="text-xs text-accent-purple opacity-60 italic">"{transcript}{isListening ? '...' : ''}"</p>
                 </div>
@@ -441,17 +532,19 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
         )}
       </AnimatePresence>
 
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => setIsOpen(!isOpen)}
-        className={triggerClassName ?? `${compact ? 'h-11 px-4 rounded-xl gap-2 text-[11px] font-bold uppercase tracking-widest' : 'w-14 h-14 rounded-full'} flex items-center justify-center shadow-2xl transition-all ${
-          isOpen ? 'bg-white text-accent-purple border border-accent-purple/20' : 'bg-accent-purple text-white shadow-accent-purple/30'
-        }`}
-      >
-        {isOpen ? <MessageSquare size={compact ? 16 : 20} /> : <Sparkles size={compact ? 16 : 20} />}
-        {compact && <span>ИИ Алиса</span>}
-      </motion.button>
+      {!embedded && (
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setIsOpen(!isOpen)}
+          className={triggerClassName ?? `${compact ? 'h-11 px-4 rounded-xl gap-2 text-[11px] font-bold uppercase tracking-widest' : 'w-14 h-14 rounded-full'} flex items-center justify-center shadow-2xl transition-all ${
+            isOpen ? 'bg-white text-accent-purple border border-accent-purple/20' : 'bg-accent-purple text-white shadow-accent-purple/30'
+          }`}
+        >
+          {isOpen ? <MessageSquare size={compact ? 22 : 20} /> : <Sparkles size={compact ? 22 : 20} />}
+          {compact && showCompactLabel && <span>ИИ Алиса</span>}
+        </motion.button>
+      )}
     </div>
   );
 };

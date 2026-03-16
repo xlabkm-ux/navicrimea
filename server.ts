@@ -112,12 +112,304 @@ const buildLocalRoute = (prompt: string) => ({
   }
 });
 
+const searchDiscoveryRecommendations = (message: string, regionId: string | null) => {
+  const normalized = normalizeSearchText(message);
+  const keywords = extractSearchTokens(normalized);
+
+  const matches = (Object.values(discoveryContent).flat() as Array<any>)
+    .map((item) => {
+      const haystack = normalizeSearchText(
+        `${item.title} ${item.category} ${item.summary} ${item.details} ${item.source} ${item.url} ${regionId || ''}`,
+      );
+      let score = 0;
+
+      for (const token of keywords) {
+        if (haystack.includes(token)) score += 2;
+      }
+
+      if (regionId && haystack.includes(regionId)) score += 2;
+      if (normalized.includes('маршрут') && item.category.toLowerCase().includes('маршрут')) score += 2;
+      if (normalized.includes('безопас') && item.category.toLowerCase().includes('безопас')) score += 2;
+      if (normalized.includes('впечатлен') && item.category.toLowerCase().includes('впечат')) score += 2;
+
+      return { item, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map(({ item }) => ({
+      id: item.id,
+      title: item.title,
+      category: item.category,
+      source: item.source,
+      summary: item.summary,
+      url: item.url,
+    }));
+
+  return matches;
+};
+
 const getYandexApiKey = () => getConfig('YANDEX_API_KEY') || getConfig('YANDEX_GPT_KEY');
 const getYandexFolderId = () => getConfig('YANDEX_FOLDER_ID');
 const getYandexGptModel = () => getConfig('YANDEX_GPT_MODEL') || 'yandexgpt-lite';
 const getYandexTtsVoice = () => getConfig('YANDEX_TTS_VOICE') || 'alena';
 const assistantInstruction =
-  'Ты — голосовой помощник туристической платформы НавиКрым. Говори естественно, дружелюбно и короткими фразами на русском. Учитывай контекст поездки по Крыму. Не выдумывай факты, если данных нет. Если пользователь просит маршрут, проживание или идеи отдыха, отвечай практично и по делу.';
+  'Ты — Алиса, голосовой помощник туристической платформы НавиКрым. Ты помогаешь путешественникам по Крыму находить и сравнивать туристические ресурсы: гостиницы, отели, апартаменты, квартиры для аренды, такси, рестораны, столовые, развлечения, экскурсии, музеи, выставки и сопутствующие сервисы. Всегда отвечай на русском языке, коротко, понятно и практично, с акцентом на конкретные варианты для поездки. Не выдумывай факты и прямо сообщай, если данных недостаточно. Всегда говори от женского лица независимо от запроса пользователя: используй формы «нашла», «подобрала», «рекомендую», «могу предложить» и избегай мужских форм.';
+
+const regionAliases: Record<string, string[]> = {
+  yalta: ['ялта', 'yalta'],
+  sevastopol: ['севастополь', 'севастополе', 'севастополя', 'sevastopol'],
+  simferopol: ['симферополь', 'simferopol'],
+  evpatoria: ['евпатория', 'evpatoria'],
+  kerch: ['керчь', 'kerch'],
+  feodosia: ['феодосия', 'feodosia'],
+  sudak: ['судак', 'sudak'],
+  bakhchisaray: ['бахчисарай', 'bakhchisaray'],
+  koktebel: ['коктебель', 'koktebel'],
+  alushta: ['алушта', 'alushta'],
+  gurzuf: ['гурзуф', 'gurzuf'],
+  foros: ['форос', 'foros'],
+  balaklava: ['балаклава', 'balaklava'],
+  inkerman: ['инкерман', 'inkerman'],
+  saki: ['саки', 'saki'],
+  chernomorskoe: ['черноморское', 'chernomorskoe'],
+  shchelkino: ['щелкино', 'щёлкино', 'shchelkino'],
+  belogorsk: ['белогорск', 'belogorsk'],
+};
+
+const searchStopwords = new Set([
+  'хочу', 'нужен', 'нужно', 'нужна', 'нужны', 'найди', 'найти', 'подбери', 'подобрать', 'покажи', 'посоветуй',
+  'мне', 'для', 'с', 'со', 'и', 'в', 'во', 'на', 'по', 'из', 'до', 'от', 'без', 'или', 'где', 'который', 'которая',
+  'какой', 'какая', 'тихий', 'тихое', 'тихая', 'уютный', 'уютная', 'хороший', 'хорошая', 'отель', 'гостиница',
+  'жилье', 'жильё', 'апартаменты', 'дом', 'гостевой', 'номер', 'моря', 'море', 'видом', 'вид', 'рядом', 'около',
+  'будет', 'есть', 'хотим', 'семья', 'семьей', 'семьёй', 'двое', 'трое', 'человека', 'человек'
+]);
+
+const normalizeSearchText = (value: string) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const extractBudgetMax = (message: string) => {
+  const normalized = normalizeSearchText(message);
+  const patterns = [
+    /(?:до|не дороже|не выше|максимум|бюджет(?:ом)?(?: до)?)[^\d]{0,10}(\d[\d\s]{2,6})/,
+    /(\d[\d\s]{2,6})\s*(?:руб|р|₽)/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    if (match?.[1]) {
+      const value = Number(match[1].replace(/\s+/g, ''));
+      if (Number.isFinite(value)) return value;
+    }
+  }
+
+  return null;
+};
+
+const detectRegionId = (message: string) => {
+  const normalized = normalizeSearchText(message);
+  for (const [regionId, aliases] of Object.entries(regionAliases)) {
+    if (aliases.some((alias) => normalized.includes(alias))) {
+      return regionId;
+    }
+  }
+  return null;
+};
+
+const extractSearchTokens = (message: string) =>
+  normalizeSearchText(message)
+    .split(' ')
+    .filter((token) => token.length >= 3 && !searchStopwords.has(token));
+
+const decodeHtmlEntities = (value: string) =>
+  value
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
+
+const collectDuckTopics = (topics: any[], bucket: any[] = []) => {
+  for (const topic of topics || []) {
+    if (topic?.Text && topic?.FirstURL) {
+      bucket.push(topic);
+      continue;
+    }
+    if (Array.isArray(topic?.Topics)) {
+      collectDuckTopics(topic.Topics, bucket);
+    }
+  }
+  return bucket;
+};
+
+const buildInternetQuery = (message: string, regionId: string | null) => {
+  const regionToken = regionId ? `${regionId} крым` : 'крым';
+  const base = normalizeSearchText(message);
+  const tourismSuffix =
+    'гостиницы отели апартаменты квартиры аренда такси рестораны столовые развлечения экскурсии музеи выставки';
+  return `${base} ${regionToken} ${tourismSuffix}`.trim();
+};
+
+const searchInternetRecommendations = async (message: string, regionId: string | null) => {
+  const normalizedMessage = normalizeSearchText(message);
+  const fallback = searchDiscoveryRecommendations(normalizedMessage, regionId);
+  const query = buildInternetQuery(message, regionId);
+
+  try {
+    const response = await fetch(
+      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
+      {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'NaviCrimeaBot/1.0',
+        },
+      },
+    );
+
+    if (!response.ok) {
+      return fallback;
+    }
+
+    const data: any = await response.json();
+    const rawTopics = collectDuckTopics(Array.isArray(data?.RelatedTopics) ? data.RelatedTopics : []);
+    const abstractTopic =
+      data?.AbstractText && data?.AbstractURL
+        ? [{ Text: String(data.AbstractText), FirstURL: String(data.AbstractURL) }]
+        : [];
+    const merged = [...abstractTopic, ...rawTopics];
+    const tokens = extractSearchTokens(message);
+
+    const scored = merged
+      .map((topic: any, index: number) => {
+        const text = decodeHtmlEntities(String(topic?.Text || ''));
+        const url = String(topic?.FirstURL || '').trim();
+        if (!text || !url) return null;
+        const haystack = normalizeSearchText(`${text} ${url}`);
+        let score = 0;
+        for (const token of tokens) {
+          if (haystack.includes(token)) score += 2;
+        }
+        if (regionId && haystack.includes(regionId)) score += 2;
+        if (normalizedMessage && haystack.includes(normalizedMessage)) score += 2;
+        return { topic: { text, url }, score, index };
+      })
+      .filter((item): item is { topic: { text: string; url: string }; score: number; index: number } => !!item)
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .slice(0, 5)
+      .map(({ topic, index }) => {
+        const [rawTitle, ...rest] = topic.text.split(' - ');
+        const title = rawTitle || topic.text;
+        const summary = rest.join(' - ') || topic.text;
+        let source = 'Internet';
+        try {
+          source = new URL(topic.url).hostname.replace(/^www\./, '');
+        } catch {
+          source = 'Internet';
+        }
+        return {
+          id: `web-${index}-${Buffer.from(topic.url).toString('base64').slice(0, 8)}`,
+          title,
+          category: 'Интернет',
+          source,
+          summary,
+          url: topic.url,
+        };
+      });
+
+    if (!scored.length) {
+      return fallback;
+    }
+
+    return scored;
+  } catch {
+    return fallback;
+  }
+};
+
+const buildObjectSearchActions = (
+  message: string,
+  objects: any[],
+  externalResultsInput?: Array<{
+    id: string;
+    title: string;
+    category: string;
+    source: string;
+    summary: string;
+    url: string;
+  }>,
+) => {
+  const normalized = normalizeSearchText(message);
+  const regionId = detectRegionId(normalized);
+  const budgetMax = extractBudgetMax(normalized);
+  const tokens = extractSearchTokens(normalized);
+
+  const scored = objects
+    .filter((obj) => {
+      const regionMatches = regionId ? obj.region === regionId : true;
+      const budgetMatches = budgetMax ? Number(obj.price_per_night) <= budgetMax : true;
+      return regionMatches && budgetMatches;
+    })
+    .map((obj) => {
+      const haystack = normalizeSearchText(`${obj.name} ${obj.type} ${obj.description} ${obj.region}`);
+      let score = 0;
+
+      if (regionId && obj.region === regionId) score += 5;
+      if (budgetMax && Number(obj.price_per_night) <= budgetMax) score += 2;
+      if (normalized.includes('отель') && haystack.includes('отель')) score += 3;
+      if (normalized.includes('апартамент') && haystack.includes('апартамент')) score += 3;
+      if (normalized.includes('дом') && haystack.includes('дом')) score += 2;
+
+      for (const token of tokens) {
+        if (haystack.includes(token)) score += 2;
+      }
+
+      return { obj, score };
+    })
+    .sort((a, b) => b.score - a.score || Number(a.obj.price_per_night) - Number(b.obj.price_per_night));
+
+  const topMatches = scored.filter((item) => item.score > 0).slice(0, 6);
+  const externalResults = externalResultsInput ?? searchDiscoveryRecommendations(normalized, regionId);
+  if (!topMatches.length && !regionId && !budgetMax && !externalResults.length) {
+    return [];
+  }
+
+  const focusObject = (topMatches[0] || scored[0])?.obj;
+  const query =
+    tokens.find((token) => focusObject && normalizeSearchText(`${focusObject.name} ${focusObject.type}`).includes(token)) ||
+    (focusObject ? String(focusObject.type || '') : normalizeSearchText(message).slice(0, 80));
+
+  const actions: Array<{ type: string; payload: any }> = [
+    { type: 'set_view_mode', payload: { mode: 'list' } },
+    {
+      type: 'search_objects',
+      payload: {
+        query,
+        regionId,
+        budgetMax,
+        focusObjectId: focusObject?.id ?? null,
+        objectIds: topMatches.map((item) => item.obj.id),
+        externalResults,
+      },
+    },
+  ];
+
+  if (regionId) {
+    actions.unshift({ type: 'show_region', payload: { regionId } });
+  }
+
+  if (focusObject?.id) {
+    actions.push({ type: 'focus_object', payload: { objectId: focusObject.id } });
+  }
+
+  return actions;
+};
 
 async function startServer() {
   const app = express();
@@ -182,6 +474,21 @@ async function startServer() {
     }
 
     try {
+      const objects = db.prepare('SELECT * FROM objects').all() as any[];
+      const rawConversation = Array.isArray(context?.conversation) ? context.conversation : [];
+      const conversationMessages = rawConversation
+        .map((entry: any) => {
+          const role = entry?.role === 'assistant' ? 'assistant' : entry?.role === 'user' ? 'user' : null;
+          const text = String(entry?.text || '').trim();
+          if (!role || !text) return null;
+          return { role, text };
+        })
+        .filter((entry: any): entry is { role: 'assistant' | 'user'; text: string } => !!entry)
+        .slice(-12);
+      const contextForPrompt =
+        context && typeof context === 'object'
+          ? Object.fromEntries(Object.entries(context).filter(([key]) => key !== 'conversation'))
+          : {};
       const response = await fetch('https://llm.api.cloud.yandex.net/foundationModels/v1/completion', {
         method: 'POST',
         headers: {
@@ -194,7 +501,8 @@ async function startServer() {
           completionOptions: { stream: false, temperature: 0.35, maxTokens: '2000' },
           messages: [
             { role: 'system', text: context?.instruction || assistantInstruction },
-            { role: 'user', text: `Контекст приложения: ${JSON.stringify(context)}.\nСообщение пользователя: ${message}` }
+            ...conversationMessages,
+            { role: 'user', text: `Контекст приложения: ${JSON.stringify(contextForPrompt)}.\nСообщение пользователя: ${message}` }
           ]
         })
       });
@@ -206,8 +514,10 @@ async function startServer() {
           `YandexGPT request failed with status ${response.status}`;
         return res.status(response.status).json({ text: `YandexGPT error: ${errorMessage}` });
       }
+      const plainMessage = String(message || '');
       const responseText = data.result?.alternatives?.[0]?.message?.text || 'Не удалось получить ответ от YandexGPT.';
-      const actions = [];
+      const internetResults = await searchInternetRecommendations(plainMessage, detectRegionId(plainMessage));
+      const actions = buildObjectSearchActions(plainMessage, objects, internetResults);
       if (String(message).toLowerCase().includes('фото')) actions.push({ type: 'search_photos', payload: { query: context?.currentRegion || 'Крым' } });
       res.json({ text: responseText, actions });
     } catch (err) {

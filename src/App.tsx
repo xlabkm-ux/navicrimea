@@ -1423,6 +1423,7 @@ export default function App() {
   const [selectedPOI, setSelectedPOI] = useState<POI | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [budgetMax, setBudgetMax] = useState<number | null>(null);
   const [searchDestination, setSearchDestination] = useState('');
   const [searchDates, setSearchDates] = useState('');
   const [searchGuests, setSearchGuests] = useState('2 взрослых · 0 детей · 1 номер');
@@ -1432,7 +1433,6 @@ export default function App() {
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [viewModeMenuOpen, setViewModeMenuOpen] = useState(false);
   const [lang, setLang] = useState<Language>('ru');
   const [langMenuOpen, setLangMenuOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -1451,6 +1451,22 @@ export default function App() {
   const [showCabinet, setShowCabinet] = useState(false);
   const [showAboutUs, setShowAboutUs] = useState(false);
   const [showPartnerMenu, setShowPartnerMenu] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantResults, setAssistantResults] = useState<{
+    query: string;
+    objectIds: Array<number | string>;
+    externalResults: Array<{
+      id: string;
+      title: string;
+      category: string;
+      source: string;
+      summary: string;
+      url: string;
+    }>;
+    regionId?: string | null;
+    budgetMax?: number | null;
+  } | null>(null);
   const [showVerificationMethods, setShowVerificationMethods] = useState(false);
   const [verifyingPhone, setVerifyingPhone] = useState(false);
   const [verifyingEmail, setVerifyingEmail] = useState(false);
@@ -1480,7 +1496,9 @@ export default function App() {
           : prev.interests
       }));
     } else if (action.type === 'show_region') {
-      setSelectedRegion(action.payload.regionId);
+      setSelectedRegion(null);
+      setCatalogRegionId(action.payload?.regionId ?? null);
+      setViewMode('list');
       setShowHero(false);
     } else if (action.type === 'add_route_point') {
       const point = action.payload.point;
@@ -1497,7 +1515,82 @@ export default function App() {
             setShowPhotoGallery(true);
           }
         });
+    } else if (action.type === 'set_view_mode') {
+      if (action.payload?.mode === 'grid' || action.payload?.mode === 'list') {
+        setViewMode(action.payload.mode);
+      }
+    } else if (action.type === 'search_objects') {
+      setShowHero(false);
+      setAssistantOpen(true);
+      setSelectedObject(null);
+      setSelectedPOI(null);
+      setSelectedRegion(null);
+      const nextQuery = String(action.payload?.query || '').trim();
+      const nextBudget = typeof action.payload?.budgetMax === 'number' ? action.payload.budgetMax : null;
+      setSearchQuery(nextQuery);
+      setBudgetMax(nextBudget);
+      setCatalogRegionId(action.payload?.regionId ?? null);
+      setViewMode('list');
+      setAssistantResults({
+        query: nextQuery,
+        objectIds: Array.isArray(action.payload?.objectIds) ? action.payload.objectIds : [],
+        externalResults: Array.isArray(action.payload?.externalResults) ? action.payload.externalResults : [],
+        regionId: action.payload?.regionId ?? null,
+        budgetMax: nextBudget,
+      });
+      window.requestAnimationFrame(() => {
+        assistantSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    } else if (action.type === 'focus_object') {
+      const objectId = action.payload?.objectId;
+      if (objectId != null) {
+        const object = objects.find((item) => String(item.id) === String(objectId));
+        if (object) {
+          setSelectedObject(object);
+        }
+      }
     }
+  };
+  const assistantSectionRef = React.useRef<HTMLDivElement | null>(null);
+
+  const handleGoHome = () => {
+    setShowHero(false);
+    setSelectedRegion(null);
+    setCatalogRegionId(null);
+    setSelectedObject(null);
+    setSelectedPOI(null);
+    setShowRoutePlanner(false);
+    setShowImpressions(false);
+    setShowCompanionFinder(false);
+    setShowPartnerMenu(false);
+    setShowSettingsMenu(false);
+    setLangMenuOpen(false);
+    setViewMode('grid');
+    setSearchQuery('');
+    setBudgetMax(null);
+    setAssistantResults(null);
+  };
+
+  const toggleAssistantPanel = () => {
+    setShowHero(false);
+    setAssistantOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        window.requestAnimationFrame(() => {
+          assistantSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      }
+      return next;
+    });
+  };
+
+  const openRegionsCatalog = () => {
+    setShowHero(false);
+    setSelectedRegion(null);
+    setCatalogRegionId(null);
+    setSelectedObject(null);
+    setSelectedPOI(null);
+    setViewMode('grid');
   };
   const calculateNights = (start: Date | null, end: Date | null) => {
     if (!start || !end) return 0;
@@ -1576,38 +1669,53 @@ export default function App() {
     };
 
     return (
-      <div className="absolute top-full left-0 mt-2 bg-white rounded-3xl shadow-2xl border border-black/5 p-6 z-[200] w-[320px]">
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2 hover:bg-black/5 rounded-xl transition-colors">
-            <ChevronLeft size={16} />
-          </button>
-          <div className="text-[10px] font-bold uppercase tracking-widest">
-            {currentMonth.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}
+      <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={() => setShowDatePicker(false)}
+          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96, x: -80 }}
+          animate={{ opacity: 1, scale: 1, x: 0 }}
+          exit={{ opacity: 0, scale: 0.96, x: -80 }}
+          className="relative bg-white rounded-3xl shadow-2xl border border-black/10 p-6 w-full max-w-md max-h-[88vh] overflow-y-auto custom-scrollbar"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2 hover:bg-black/5 rounded-xl transition-colors">
+              <ChevronLeft size={16} />
+            </button>
+            <div className="text-[10px] font-bold uppercase tracking-widest">
+              {currentMonth.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}
+            </div>
+            <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2 hover:bg-black/5 rounded-xl transition-colors">
+              <ChevronRight size={16} />
+            </button>
           </div>
-          <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2 hover:bg-black/5 rounded-xl transition-colors">
-            <ChevronRight size={16} />
-          </button>
-        </div>
-        <div className="grid grid-cols-7 gap-1 mb-2">
-          {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => (
-            <div key={day} className="h-10 w-10 flex items-center justify-center text-[8px] font-bold opacity-30 uppercase tracking-widest">
-              {day}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {renderCalendar()}
-        </div>
-        {startDate && endDate && (
-          <div className="mt-6 pt-6 border-t border-black/5">
-            <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">
-              {calculateNights(startDate, endDate)} {calculateNights(startDate, endDate) === 1 ? 'ночь' : 'ночи'}
-            </div>
-            <div className="text-[8px] opacity-40 uppercase tracking-widest font-bold">
-              с {formatDate(startDate)} по {formatDate(endDate)}
-            </div>
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => (
+              <div key={day} className="h-10 w-10 flex items-center justify-center text-[8px] font-bold opacity-30 uppercase tracking-widest">
+                {day}
+              </div>
+            ))}
           </div>
-        )}
+          <div className="grid grid-cols-7 gap-1">
+            {renderCalendar()}
+          </div>
+          {startDate && endDate && (
+            <div className="mt-6 pt-6 border-t border-black/5">
+              <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">
+                {calculateNights(startDate, endDate)} {calculateNights(startDate, endDate) === 1 ? 'ночь' : 'ночи'}
+              </div>
+              <div className="text-[8px] opacity-40 uppercase tracking-widest font-bold">
+                с {formatDate(startDate)} по {formatDate(endDate)}
+              </div>
+            </div>
+          )}
+        </motion.div>
       </div>
     );
   };
@@ -1619,57 +1727,72 @@ export default function App() {
     );
 
     return (
-      <div className="absolute top-full left-0 mt-2 bg-white rounded-3xl shadow-2xl border border-black/5 overflow-hidden z-[200] w-[320px] py-2">
-        <div className="px-4 py-2 text-[8px] font-bold uppercase tracking-widest opacity-30 border-b border-black/5">
-          {selectedCityForDistricts ? 'Выберите район' : 'Популярные направления'}
-        </div>
-        
-        <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
-          {selectedCityForDistricts ? (
-            <>
-              <button 
-                onClick={() => setSelectedCityForDistricts(null)}
-                className="w-full text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest hover:bg-black/5 text-accent-purple flex items-center gap-2"
-              >
-                <ChevronLeft size={12} /> Назад к городам
-              </button>
-              {CRIMEA_CITIES.find(c => c.id === selectedCityForDistricts)?.districts.map(district => (
-                <button
-                  key={district}
-                  onClick={() => {
-                    const cityName = CRIMEA_CITIES.find(c => c.id === selectedCityForDistricts)?.name;
-                    setSearchDestination(`${cityName}, ${district}`);
-                    setShowDestinationPicker(false);
-                    setSelectedCityForDistricts(null);
-                  }}
-                  className="w-full text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest hover:bg-black/5 text-black/60 flex items-center gap-3"
+      <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={() => setShowDestinationPicker(false)}
+          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96, x: -80 }}
+          animate={{ opacity: 1, scale: 1, x: 0 }}
+          exit={{ opacity: 0, scale: 0.96, x: -80 }}
+          className="relative bg-white rounded-3xl shadow-2xl border border-black/10 overflow-hidden w-full max-w-md max-h-[88vh] py-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-4 py-2 text-[8px] font-bold uppercase tracking-widest opacity-30 border-b border-black/5">
+            {selectedCityForDistricts ? 'Выберите район' : 'Популярные направления'}
+          </div>
+          
+          <div className="max-h-[72vh] overflow-y-auto custom-scrollbar">
+            {selectedCityForDistricts ? (
+              <>
+                <button 
+                  onClick={() => setSelectedCityForDistricts(null)}
+                  className="w-full text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest hover:bg-black/5 text-accent-purple flex items-center gap-2"
                 >
-                  <MapPin size={14} className="opacity-30" />
-                  {district}
+                  <ChevronLeft size={12} /> Назад к городам
                 </button>
-              ))}
-            </>
-          ) : (
-            filteredCities.map(city => (
-              <button
-                key={city.id}
-                onClick={() => setSelectedCityForDistricts(city.id)}
-                className="w-full text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest hover:bg-black/5 text-black/60 flex items-center justify-between group"
-              >
-                <div className="flex items-center gap-3">
-                  <Globe size={14} className="opacity-30" />
-                  {city.name}
-                </div>
-                <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
-            ))
-          )}
-          {filteredCities.length === 0 && (
-            <div className="px-4 py-8 text-center text-[10px] font-bold uppercase tracking-widest opacity-30">
-              Ничего не найдено
-            </div>
-          )}
-        </div>
+                {CRIMEA_CITIES.find(c => c.id === selectedCityForDistricts)?.districts.map(district => (
+                  <button
+                    key={district}
+                    onClick={() => {
+                      const cityName = CRIMEA_CITIES.find(c => c.id === selectedCityForDistricts)?.name;
+                      setSearchDestination(`${cityName}, ${district}`);
+                      setShowDestinationPicker(false);
+                      setSelectedCityForDistricts(null);
+                    }}
+                    className="w-full text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest hover:bg-black/5 text-black/60 flex items-center gap-3"
+                  >
+                    <MapPin size={14} className="opacity-30" />
+                    {district}
+                  </button>
+                ))}
+              </>
+            ) : (
+              filteredCities.map(city => (
+                <button
+                  key={city.id}
+                  onClick={() => setSelectedCityForDistricts(city.id)}
+                  className="w-full text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest hover:bg-black/5 text-black/60 flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-3">
+                    <Globe size={14} className="opacity-30" />
+                    {city.name}
+                  </div>
+                  <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+              ))
+            )}
+            {filteredCities.length === 0 && (
+              <div className="px-4 py-8 text-center text-[10px] font-bold uppercase tracking-widest opacity-30">
+                Ничего не найдено
+              </div>
+            )}
+          </div>
+        </motion.div>
       </div>
     );
   };
@@ -1697,6 +1820,7 @@ export default function App() {
   const [showCompanionFinder, setShowCompanionFinder] = useState(false);
   const [showPresentation, setShowPresentation] = useState(false);
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  const [catalogRegionId, setCatalogRegionId] = useState<string | null>(null);
   const [addTransfer, setAddTransfer] = useState(false);
   const [landlordAd, setLandlordAd] = useState({
     category: 'housing', // housing, transport, services, legal, social
@@ -2383,13 +2507,22 @@ export default function App() {
   };
 
   const filteredObjects = useMemo(() => {
+    const activeRegionId = selectedRegion ?? catalogRegionId;
     return objects.filter(obj => {
-      const matchesSearch = obj.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           obj.type.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesRegion = selectedRegion ? obj.region === selectedRegion : true;
-      return matchesSearch && matchesRegion;
+      const normalizedQuery = searchQuery.toLowerCase().trim();
+      const haystack = `${obj.name} ${obj.type} ${obj.description} ${obj.region}`.toLowerCase();
+      const matchesSearch = !normalizedQuery || haystack.includes(normalizedQuery);
+      const matchesRegion = activeRegionId ? obj.region === activeRegionId : true;
+      const matchesBudget = budgetMax ? Number(obj.price_per_night) <= budgetMax : true;
+      return matchesSearch && matchesRegion && matchesBudget;
     });
-  }, [objects, searchQuery, selectedRegion]);
+  }, [objects, searchQuery, selectedRegion, catalogRegionId, budgetMax]);
+
+  const assistantMatchedObjects = useMemo(() => {
+    if (!assistantResults?.objectIds?.length) return [];
+    const ids = new Set(assistantResults.objectIds.map((id) => String(id)));
+    return objects.filter((obj) => ids.has(String(obj.id)));
+  }, [assistantResults, objects]);
 
   const regionGallery = useMemo(() => {
     if (!selectedRegion) return [];
@@ -2455,9 +2588,9 @@ export default function App() {
             onClick={() => setShowAboutUs(false)}
           >
             <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              initial={{ opacity: 0, scale: 0.96, x: -80 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.96, x: -80 }}
               className="bg-white w-full max-w-4xl max-h-[90vh] rounded-[40px] shadow-2xl overflow-hidden flex flex-col"
               onClick={e => e.stopPropagation()}
             >
@@ -2533,13 +2666,13 @@ export default function App() {
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             />
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative bg-white rounded-[40px] shadow-2xl border border-black/5 w-full max-w-2xl overflow-hidden flex flex-col md:flex-row"
+              initial={{ scale: 0.96, opacity: 0, x: -80 }}
+              animate={{ scale: 1, opacity: 1, x: 0 }}
+              exit={{ scale: 0.96, opacity: 0, x: -80 }}
+              className="relative bg-white rounded-[40px] shadow-2xl border border-black/5 w-full max-w-5xl h-[min(88vh,980px)] overflow-hidden flex flex-col md:flex-row"
             >
               {/* Sidebar Profile Info */}
-              <div className="w-full md:w-1/3 bg-peach-bg p-8 flex flex-col items-center border-b md:border-b-0 md:border-r border-accent-purple/10">
+              <div className="w-full md:w-1/3 bg-peach-bg p-8 flex flex-col items-center border-b md:border-b-0 md:border-r border-accent-purple/10 overflow-y-auto">
                 <div className="relative mb-6 group">
                   <img 
                     src={userProfile.photo} 
@@ -2626,7 +2759,7 @@ export default function App() {
               </div>
 
               {/* Main Settings Area */}
-              <div className="flex-1 p-8 overflow-y-auto max-h-[80vh]">
+              <div className="flex-1 p-8 overflow-y-auto">
                 <AnimatePresence mode="wait">
                   {!showLandlordForm ? (
                     <motion.div
@@ -4218,12 +4351,28 @@ export default function App() {
       {/* Presentation / Grant Concept View */}
       <AnimatePresence>
         {showCompanionFinder && (
-          <Suspense fallback={<LazyPanelFallback />}>
-            <CompanionFinder 
-              onClose={() => setShowCompanionFinder(false)} 
-              userProfile={userProfile}
+          <div className="fixed inset-0 z-[95] flex items-center justify-center p-3 md:p-6 lg:p-8">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowCompanionFinder(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             />
-          </Suspense>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, x: -80 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.96, x: -80 }}
+              className="relative w-full max-w-6xl h-[min(88vh,960px)] bg-white rounded-[32px] border border-black/10 shadow-2xl overflow-hidden"
+            >
+              <Suspense fallback={<LazyPanelFallback />}>
+                <CompanionFinder 
+                  onClose={() => setShowCompanionFinder(false)} 
+                  userProfile={userProfile}
+                />
+              </Suspense>
+            </motion.div>
+          </div>
         )}
         {showPresentation && (
           <motion.div 
@@ -4524,7 +4673,7 @@ export default function App() {
         <ExternalVoiceAssistant 
           onAction={handleAIAction} 
           currentContext={{ 
-            selectedRegion, 
+            selectedRegion: selectedRegion ?? catalogRegionId,
             routePointsCount: routePoints.length,
             preferences,
             language: lang
@@ -4534,238 +4683,110 @@ export default function App() {
       </Suspense>
 
       {/* Navigation Rail */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-accent-purple/10 px-4 md:px-6 py-2 flex flex-col">
-        <div className="flex items-center justify-between min-h-12 gap-3 flex-wrap">
-          <div className="flex items-center gap-2 md:gap-4 shrink-0">
-            <div className="flex items-center gap-2 cursor-pointer group" onClick={() => { setShowHero(true); setSelectedRegion(null); }}>
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl border-b border-accent-purple/10 px-3 md:px-5 py-2 flex flex-col gap-2">
+        <div className="flex items-center justify-between min-h-10 gap-3 flex-wrap">
+          <div className="flex items-center gap-2 md:gap-3 shrink-0">
+            <div className="flex items-center gap-2 cursor-pointer group" onClick={openRegionsCatalog}>
               <img
                 src="/android-chrome-192x192.png"
                 alt="Герб НавиКрым"
-                className="w-8 h-8 object-contain drop-shadow-md group-hover:scale-110 transition-transform"
+                className="w-7 h-7 object-contain drop-shadow-md group-hover:scale-110 transition-transform"
               />
-              <span className="font-bold tracking-tight text-lg xl:text-[1.35rem] logo-gradient whitespace-nowrap">НавиКрым</span>
+              <span className="font-bold tracking-tight text-[1.9rem] leading-none logo-gradient whitespace-nowrap">НавиКрым</span>
             </div>
-
-            <button 
-              onClick={() => setShowCabinet(true)}
-              className="nav-meta nav-pill flex items-center gap-2 px-3 md:px-4 py-2 border border-accent-purple/30 text-accent-purple rounded-xl font-semibold hover:bg-accent-purple/5 active:bg-accent-purple active:text-white transition-all whitespace-nowrap"
-            >
-              <User size={14} />
-              <span className="hidden xs:inline">{t.cabinet}</span>
-            </button>
-
-            <Suspense fallback={null}>
-              <ExternalVoiceAssistant 
-                onAction={handleAIAction}
-                currentContext={{ 
-                  selectedRegion, 
-                  routePointsCount: routePoints.length,
-                  preferences,
-                  language: lang
-                }}
-                containerClassName="relative hidden lg:block"
-                panelClassName="absolute top-full left-0 mt-3 w-80 bg-white rounded-[32px] shadow-2xl border border-accent-purple/10 overflow-hidden z-[110]"
-                compact
-              />
-            </Suspense>
-
-            <button 
-              onClick={() => setShowAboutUs(true)}
-              className="nav-meta nav-pill hidden lg:flex items-center gap-2 px-3 py-2 text-black/60 hover:text-black transition-colors font-semibold"
-            >
-              <Info size={14} />
-              {t.aboutUs}
-            </button>
-
           </div>
+          <div className="nav-menu flex items-center justify-center gap-1 2xl:gap-2.5 font-semibold text-black/88 flex-wrap flex-1 min-w-0">
+            <button 
+              onClick={openRegionsCatalog}
+              className={`nav-menu-item compact flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${viewMode === 'grid' && !selectedRegion ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-accent-purple/15 text-black/62 hover:text-black hover:bg-accent-purple/5'}`}
+            >
+              <Layers size={14} />
+              {t.regions || 'Регионы'}
+            </button>
+            <button 
+              onClick={() => setShowRoutePlanner(!showRoutePlanner)}
+              className={`nav-menu-item compact transition-all flex items-center gap-2 px-3 py-2 rounded-xl border ${showRoutePlanner ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-transparent hover:bg-black/5'}`}
+            >
+              {t.routes}
+              {isVip && (
+                <span className="bg-amber-400 text-amber-900 px-1.5 py-0.5 rounded text-[8px] font-black tracking-tighter shadow-sm">
+                  VIP
+                </span>
+              )}
+              {routePoints.length > 0 && (
+                <span className="bg-purple-600 text-white w-4 h-4 rounded-full flex items-center justify-center text-[8px] animate-pulse">
+                  {routePoints.length}
+                </span>
+              )}
+            </button>
+            <button 
+              onClick={() => {
+                setShowImpressions(true);
+                setShowRoutePlanner(false);
+                setShowCompanionFinder(false);
+              }}
+              className={`nav-menu-item compact transition-all flex items-center gap-2 px-3 py-2 rounded-xl border ${showImpressions ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-transparent hover:bg-black/5'}`}
+            >
+              {t.experiences}
+            </button>
+            <button 
+              onClick={() => setShowCompanionFinder(true)}
+              className={`nav-menu-item compact transition-all flex items-center gap-2 px-3 py-2 rounded-xl border ${showCompanionFinder ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-transparent hover:bg-black/5'}`}
+            >
+              {t.findCompanion}
+            </button>
 
-          <div className="flex items-center gap-2 md:gap-3 shrink-0">
-            <div className="relative hidden lg:block">
+            <div className="hidden lg:block">
               <button 
                 onClick={() => setShowPartnerMenu(!showPartnerMenu)}
-                className={`nav-meta nav-pill flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all border bg-white ${showPartnerMenu ? 'border-accent-purple text-accent-purple' : 'border-accent-purple/15 text-black/70 hover:text-black hover:border-accent-purple/30'}`}
+                className={`nav-meta nav-pill flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all border bg-white whitespace-nowrap ${showPartnerMenu ? 'border-accent-purple text-accent-purple' : 'border-accent-purple/15 text-black/70 hover:text-black hover:border-accent-purple/30'}`}
               >
                 <Handshake size={14} />
                 {t.partnerProgram}
                 <ChevronDown size={12} className={`transition-transform ${showPartnerMenu ? 'rotate-180' : ''}`} />
               </button>
-              <AnimatePresence>
-                {showPartnerMenu && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    className="absolute right-0 mt-2 w-56 bg-white opacity-100 rounded-2xl shadow-2xl border border-black/10 overflow-hidden z-[60] py-2 backdrop-blur-none"
-                  >
-                    {(['tourist', 'hotelier', 'ministry', 'inspector'] as const).map(role => (
-                      <button
-                        key={role}
-                        onClick={() => {
-                          setUserRole(role);
-                          setShowPartnerMenu(false);
-                          if (role !== 'tourist') {
-                            setShowCabinet(true);
-                            setShowLandlordForm(true);
-                            if (role === 'ministry' || role === 'inspector') setActiveCabinetTab('monitoring');
-                            else setActiveCabinetTab('listings');
-                          }
-                        }}
-                        className={`w-full px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center justify-between ${userRole === role ? 'bg-accent-purple/10 text-accent-purple' : 'hover:bg-black/5 text-black/70'}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          {role === 'tourist' && <User size={14} />}
-                          {role === 'hotelier' && <Briefcase size={14} />}
-                          {role === 'ministry' && <ShieldCheck size={14} />}
-                          {role === 'inspector' && <Search size={14} />}
-                          {t[role]}
-                        </div>
-                        {userRole === role && <Check size={12} />}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
 
-            {/* Language Selector */}
-            <div className="relative">
+            <div>
               <button 
-                onClick={() => setLangMenuOpen(!langMenuOpen)}
-                className="nav-meta nav-pill flex items-center gap-2 px-3 py-2 border border-accent-purple/20 hover:bg-accent-purple/5 rounded-xl transition-all font-semibold text-accent-purple whitespace-nowrap"
+                onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+                className={`nav-meta nav-pill flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all border bg-white whitespace-nowrap ${showSettingsMenu ? 'border-accent-purple text-accent-purple' : 'border-accent-purple/15 text-black/70 hover:text-black hover:border-accent-purple/30'}`}
               >
-                <Globe size={14} />
-                <span className="hidden sm:inline">{languages.find(l => l.code === lang)?.native}</span>
-                <ChevronDown size={12} className={`transition-transform ${langMenuOpen ? 'rotate-180' : ''}`} />
+                <User size={14} />
+                <span>Настройки</span>
+                <ChevronDown size={12} className={`transition-transform ${showSettingsMenu ? 'rotate-180' : ''}`} />
               </button>
-              <AnimatePresence>
-                {langMenuOpen && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-black/5 overflow-hidden z-[60] py-2"
-                  >
-                    {languages.map((l) => (
-                      <button
-                        key={l.code}
-                        onClick={() => {
-                          setLang(l.code);
-                          setLangMenuOpen(false);
-                        }}
-                        className={`w-full text-left px-4 py-2 text-[10px] font-bold uppercase hover:bg-black/5 transition-colors flex items-center justify-between ${lang === l.code ? 'font-bold bg-black/5' : ''}`}
-                      >
-                        <span>{l.native}</span>
-                        <span className="opacity-40 text-[8px] uppercase">{l.code}</span>
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
-
-            <button 
-              onClick={downloadForOffline}
-              disabled={isCaching || isOffline}
-              className={`p-2 rounded-full transition-colors ${isCached ? 'text-emerald-600' : 'hover:bg-accent-purple/10'} disabled:opacity-50`}
-              title={isCached ? t.dataCached : t.downloadOffline}
-            >
-              {isCaching ? <RefreshCw size={18} className="animate-spin" /> : <CloudDownload size={18} />}
-            </button>
           </div>
-        </div>
-
-        <div className="nav-menu hidden lg:flex items-center justify-center gap-1.5 2xl:gap-3 font-semibold text-black/88 mt-2 flex-wrap">
-          <div className="relative z-[90]">
-            <button 
-              onClick={() => setViewModeMenuOpen(!viewModeMenuOpen)}
-              className={`nav-menu-item compact flex items-center gap-2 px-3 2xl:px-4 py-2 rounded-xl border transition-all ${viewModeMenuOpen ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-accent-purple/15 text-black/62 hover:text-black hover:bg-accent-purple/5'}`}
-            >
-              {viewMode === 'grid' ? <Layers size={14} /> : <List size={14} />}
-              {viewMode === 'grid' ? (t.regions || 'Регионы') : t.list}
-              <ChevronDown size={12} className={`transition-transform ${viewModeMenuOpen ? 'rotate-180' : ''}`} />
-            </button>
-            <AnimatePresence>
-              {viewModeMenuOpen && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="absolute left-0 mt-3 min-w-[13rem] bg-white/98 backdrop-blur-xl rounded-2xl shadow-2xl border border-black/5 overflow-hidden z-[100] py-2"
-                >
-                  <button
-                    onClick={() => {
-                      setViewMode('grid');
-                      setViewModeMenuOpen(false);
-                    }}
-                    className={`w-full text-left px-4 py-3 nav-meta font-bold uppercase transition-colors flex items-center justify-between ${viewMode === 'grid' ? 'bg-accent-purple/10 text-accent-purple' : 'hover:bg-black/5 text-black/60'}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Layers size={14} />
-                      {t.regions || 'Регионы'}
-                    </div>
-                    {viewMode === 'grid' && <Check size={12} />}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setViewMode('list');
-                      setViewModeMenuOpen(false);
-                    }}
-                    className={`w-full text-left px-4 py-3 nav-meta font-bold uppercase transition-colors flex items-center justify-between ${viewMode === 'list' ? 'bg-accent-purple/10 text-accent-purple' : 'hover:bg-black/5 text-black/60'}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <List size={14} />
-                      {t.list}
-                    </div>
-                    {viewMode === 'list' && <Check size={12} />}
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-          <button 
-            onClick={() => setShowRoutePlanner(!showRoutePlanner)}
-            className={`nav-menu-item compact transition-all flex items-center gap-2 px-3 2xl:px-4 py-2 rounded-xl border ${showRoutePlanner ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-transparent hover:bg-black/5'}`}
-          >
-            {t.routes}
-            {isVip && (
-              <span className="bg-amber-400 text-amber-900 px-1.5 py-0.5 rounded text-[8px] font-black tracking-tighter shadow-sm">
-                VIP
-              </span>
-            )}
-            {routePoints.length > 0 && (
-              <span className="bg-purple-600 text-white w-4 h-4 rounded-full flex items-center justify-center text-[8px] animate-pulse">
-                {routePoints.length}
-              </span>
-            )}
-          </button>
-          <button 
-            onClick={() => {
-              setShowImpressions(true);
-              setShowRoutePlanner(false);
-              setShowCompanionFinder(false);
-            }}
-            className={`nav-menu-item compact transition-all flex items-center gap-2 px-3 2xl:px-4 py-2 rounded-xl border ${showImpressions ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-transparent hover:bg-black/5'}`}
-          >
-            {t.experiences}
-          </button>
-          <button 
-            onClick={() => setShowCompanionFinder(true)}
-            className={`nav-menu-item compact transition-all flex items-center gap-2 px-3 2xl:px-4 py-2 rounded-xl border ${showCompanionFinder ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-transparent hover:bg-black/5'}`}
-          >
-            {t.findCompanion}
-          </button>
-          <a href="#" className="nav-menu-item compact inline-flex items-center px-3 2xl:px-4 py-2 rounded-xl hover:bg-black/5 transition-colors">{t.safety}</a>
         </div>
 
         {/* Booking-style Search Bar */}
-        <div className="hidden lg:flex justify-center mt-2 pb-1">
-          <div className="flex items-center bg-white border-2 border-amber-400 rounded-xl overflow-hidden shadow-lg w-full max-w-5xl">
+        <div className="hidden lg:flex items-center gap-3 pb-1">
+          <button
+            onClick={toggleAssistantPanel}
+            className="w-16 h-14 shrink-0 rounded-2xl flex items-center justify-center bg-accent-purple text-white shadow-2xl shadow-accent-purple/30 border border-accent-purple/20 transition-all hover:scale-[1.02]"
+            title={assistantOpen ? 'Закрыть Алису' : 'Открыть Алису'}
+          >
+            <Sparkles size={26} />
+          </button>
+          <button
+            onClick={() =>
+              window.open(
+                'https://yandex.ru/maps/?ll=34.102417%2C45.317338&z=8',
+                '_blank',
+                'noopener,noreferrer'
+              )
+            }
+            className="w-16 h-14 shrink-0 rounded-2xl flex items-center justify-center bg-white text-accent-purple shadow-lg border border-accent-purple/20 transition-all hover:scale-[1.02]"
+            title="Открыть Яндекс Карты (Крым)"
+          >
+            <MapIcon size={24} />
+          </button>
+
+          <div className="flex items-center bg-white border-2 border-amber-400 rounded-xl overflow-hidden shadow-lg flex-1 min-w-0">
             <div 
               className="relative flex items-center px-4 border-r border-gray-200 flex-1"
-              onMouseEnter={() => setShowDestinationPicker(true)}
-              onMouseLeave={() => {
-                if (!searchDestination) setShowDestinationPicker(false);
-              }}
+              onClick={() => setShowDestinationPicker(true)}
             >
               <MapPin size={18} className="text-gray-400 mr-3" />
               <input 
@@ -4779,7 +4800,9 @@ export default function App() {
                 }}
                 onFocus={() => setShowDestinationPicker(true)}
               />
-              {showDestinationPicker && <DestinationPicker />}
+              <AnimatePresence>
+                {showDestinationPicker && <DestinationPicker />}
+              </AnimatePresence>
             </div>
             <div className="relative flex items-center px-4 border-r border-gray-200 cursor-pointer hover:bg-gray-50 flex-1" onClick={() => setShowDatePicker(!showDatePicker)}>
               <Calendar size={18} className="text-gray-400 mr-3" />
@@ -4795,7 +4818,9 @@ export default function App() {
                   </span>
                 )}
               </div>
-              {showDatePicker && <DatePicker />}
+              <AnimatePresence>
+                {showDatePicker && <DatePicker />}
+              </AnimatePresence>
             </div>
             <div className="flex items-center px-4 border-r border-gray-200 cursor-pointer hover:bg-gray-50 flex-1">
               <Users size={18} className="text-gray-400 mr-3" />
@@ -4813,92 +4838,207 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="pt-32 lg:pt-52 min-h-screen flex flex-col md:flex-row">
+      <AnimatePresence>
+        {showPartnerMenu && (
+          <div className="fixed inset-0 z-[205] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowPartnerMenu(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, x: -80 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.96, x: -80 }}
+              className="relative w-full max-w-md max-h-[88vh] overflow-y-auto custom-scrollbar bg-white rounded-[28px] border border-black/10 shadow-2xl py-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {(['tourist', 'hotelier', 'ministry', 'inspector'] as const).map(role => (
+                <button
+                  key={role}
+                  onClick={() => {
+                    setUserRole(role);
+                    setShowPartnerMenu(false);
+                    if (role !== 'tourist') {
+                      setShowCabinet(true);
+                      setShowLandlordForm(true);
+                      if (role === 'ministry' || role === 'inspector') setActiveCabinetTab('monitoring');
+                      else setActiveCabinetTab('listings');
+                    }
+                  }}
+                  className={`w-full px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center justify-between ${userRole === role ? 'bg-accent-purple/10 text-accent-purple' : 'hover:bg-black/5 text-black/70'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    {role === 'tourist' && <User size={14} />}
+                    {role === 'hotelier' && <Briefcase size={14} />}
+                    {role === 'ministry' && <ShieldCheck size={14} />}
+                    {role === 'inspector' && <Search size={14} />}
+                    {t[role]}
+                  </div>
+                  {userRole === role && <Check size={12} />}
+                </button>
+              ))}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showSettingsMenu && (
+          <div className="fixed inset-0 z-[205] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSettingsMenu(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, x: -80 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.96, x: -80 }}
+              className="relative w-full max-w-md max-h-[88vh] overflow-y-auto custom-scrollbar bg-white rounded-[28px] border border-black/10 shadow-2xl py-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => {
+                  setShowCabinet(true);
+                  setShowSettingsMenu(false);
+                }}
+                className="w-full text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest hover:bg-black/5 transition-colors flex items-center gap-3 text-black/70"
+              >
+                <User size={14} />
+                Личные сведения
+              </button>
+              <button
+                onClick={() => {
+                  setShowAboutUs(true);
+                  setShowSettingsMenu(false);
+                }}
+                className="w-full text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest hover:bg-black/5 transition-colors flex items-center gap-3 text-black/70"
+              >
+                <Info size={14} />
+                {t.aboutUs}
+              </button>
+              <a
+                href="#"
+                onClick={() => setShowSettingsMenu(false)}
+                className="w-full px-4 py-3 text-[10px] font-bold uppercase tracking-widest hover:bg-black/5 transition-colors flex items-center gap-3 text-black/70"
+              >
+                <ShieldCheck size={14} />
+                {t.safety}
+              </a>
+              <div className="px-4 py-3 border-t border-black/5 space-y-2">
+                <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-black/70">
+                  <Globe size={14} />
+                  <span>Язык ({languages.find(l => l.code === lang)?.native})</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {languages.map((l) => (
+                    <button
+                      key={l.code}
+                      onClick={() => {
+                        setLang(l.code);
+                        setLangMenuOpen(false);
+                        setShowSettingsMenu(false);
+                      }}
+                      className={`px-2 py-2 rounded-xl text-left text-[10px] font-bold uppercase transition-colors border ${lang === l.code ? 'bg-accent-purple/10 text-accent-purple border-accent-purple/20' : 'hover:bg-black/5 text-black/60 border-black/5'}`}
+                    >
+                      {l.native}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  void downloadForOffline();
+                  setShowSettingsMenu(false);
+                }}
+                disabled={isCaching || isOffline}
+                className="w-full text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest hover:bg-black/5 transition-colors flex items-center gap-3 text-black/70 disabled:opacity-50"
+              >
+                {isCaching ? <RefreshCw size={14} className="animate-spin" /> : <CloudDownload size={14} />}
+                Скачать для оффлайн
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <main className="pt-28 lg:pt-40 min-h-screen flex flex-col md:flex-row">
         {/* Impressions Sidebar */}
         <AnimatePresence>
           {showImpressions && (
-            <motion.div 
-              initial={{ x: -400 }}
-              animate={{ x: 0 }}
-              exit={{ x: -400 }}
-              className="fixed left-0 top-32 lg:top-52 bottom-0 w-[400px] bg-white shadow-2xl z-[45] border-r border-black/5 flex flex-col"
-            >
-              <Suspense fallback={<LazyPanelFallback />}>
-                <ImpressionsManager 
-                  visitedPlaces={visitedPlaces}
-                  impressions={impressions}
-                  onAddImpression={(imp) => setImpressions(prev => [...prev, imp])}
-                  onSyncYandex={() => {
-                    // Simulate syncing with Yandex
-                    console.log("Syncing with Yandex...");
-                  }}
-                  isYandexLinked={userProfile.verifications.yandex}
-                  onClose={() => setShowImpressions(false)}
-                />
-              </Suspense>
-            </motion.div>
+            <div className="fixed inset-0 z-[95] flex items-center justify-center p-3 md:p-6 lg:p-8">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowImpressions(false)}
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, x: -80 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.96, x: -80 }}
+                className="relative w-full max-w-5xl h-[min(88vh,920px)] bg-white rounded-[32px] border border-black/10 shadow-2xl overflow-hidden"
+              >
+                <Suspense fallback={<LazyPanelFallback />}>
+                  <ImpressionsManager 
+                    visitedPlaces={visitedPlaces}
+                    impressions={impressions}
+                    onAddImpression={(imp) => setImpressions(prev => [...prev, imp])}
+                    onSyncYandex={() => {
+                      // Simulate syncing with Yandex
+                      console.log("Syncing with Yandex...");
+                    }}
+                    isYandexLinked={userProfile.verifications.yandex}
+                    onClose={() => setShowImpressions(false)}
+                  />
+                </Suspense>
+              </motion.div>
+            </div>
           )}
         </AnimatePresence>
         <AnimatePresence>
           {showRoutePlanner && (
-            <motion.div 
-              initial={{ x: -400 }}
-              animate={{ x: 0 }}
-              exit={{ x: -400 }}
-              className="fixed left-0 top-32 lg:top-52 bottom-0 w-full md:w-[400px] bg-white shadow-2xl z-[45] border-r border-accent-purple/10 flex flex-col"
-            >
-              <Suspense fallback={<LazyPanelFallback />}>
-                <AIVoiceRoutePlanner 
-                  isVip={isVip}
-                  onClose={() => setShowRoutePlanner(false)}
-                  onRouteGenerated={(route: any) => {
-                    setRoutePoints(route.stops);
-                    // Optionally set selected object to first stop
-                    if (route.stops.length > 0) {
-                      setSelectedObject(route.stops[0]);
-                    }
-                  }}
-                />
-              </Suspense>
-            </motion.div>
+            <div className="fixed inset-0 z-[95] flex items-center justify-center p-3 md:p-6 lg:p-8">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowRoutePlanner(false)}
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, x: -80 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.96, x: -80 }}
+                className="relative w-full max-w-5xl h-[min(88vh,920px)] bg-white rounded-[32px] border border-black/10 shadow-2xl overflow-hidden"
+              >
+                <Suspense fallback={<LazyPanelFallback />}>
+                  <AIVoiceRoutePlanner 
+                    isVip={isVip}
+                    onClose={() => setShowRoutePlanner(false)}
+                    onRouteGenerated={(route: any) => {
+                      setRoutePoints(route.stops);
+                      // Optionally set selected object to first stop
+                      if (route.stops.length > 0) {
+                        setSelectedObject(route.stops[0]);
+                      }
+                    }}
+                  />
+                </Suspense>
+              </motion.div>
+            </div>
           )}
         </AnimatePresence>
 
         {/* Left Sidebar - Hidden on mobile, moved to bottom of feed */}
-        <div className="hidden md:flex w-[20%] bg-white border-r border-black/5 flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-            {loading ? (
-              <div className="flex items-center justify-center h-40 opacity-20">
-                <RefreshCw className="animate-spin" />
-              </div>
-            ) : filteredObjects.length === 0 ? (
-              <div className="text-center py-10 opacity-40 text-[10px] uppercase font-bold tracking-widest">{t.noObjects}</div>
-            ) : (
-              filteredObjects.map(obj => (
-                <motion.div 
-                  layoutId={`card-${obj.id}`}
-                  key={obj.id} 
-                  onClick={() => setSelectedObject(obj)}
-                  className={`group cursor-pointer rounded-xl overflow-hidden border transition-all ${selectedObject?.id === obj.id ? 'border-black ring-1 ring-black' : 'border-black/5 hover:border-black/20'}`}
-                >
-                  <div className="aspect-[4/3] relative overflow-hidden">
-                    <img src={obj.image_url} alt={obj.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" referrerPolicy="no-referrer" />
-                    <div className="absolute top-2 right-2 px-2 py-1 bg-white/90 backdrop-blur-md rounded-lg text-[8px] font-bold uppercase tracking-widest">
-                      ₽{obj.price_per_night}
-                    </div>
-                  </div>
-                  <div className="p-3">
-                    <h3 className="text-[10px] font-bold uppercase tracking-tight mb-1 truncate">{obj.name}</h3>
-                    <p className="text-[8px] opacity-40 uppercase font-bold tracking-widest">{obj.type}</p>
-                  </div>
-                </motion.div>
-              ))
-            )}
-          </div>
-        </div>
-
         {/* Center - Regions Grid or Region Details or Simplified List */}
-        <div className="flex-1 bg-white p-4 md:p-8">
+        <div className="flex-1 bg-white p-4 md:p-8 lg:pr-4">
           <AnimatePresence mode="wait">
             {selectedRegion ? (
               <motion.div
@@ -4911,7 +5051,10 @@ export default function App() {
                 <div className="flex items-center justify-between">
                   <h2 className="text-4xl font-serif">{CRIMEA_REGIONS.find(r => r.id === selectedRegion)?.name}</h2>
                   <button 
-                    onClick={() => setSelectedRegion(null)}
+                    onClick={() => {
+                      setSelectedRegion(null);
+                      setCatalogRegionId(null);
+                    }}
                     className="px-6 py-2 bg-purple-50 text-purple-600 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-purple-100 transition-colors"
                   >
                     {t.backToRegions}
@@ -4976,92 +5119,229 @@ export default function App() {
                   </div>
                 </div>
               </motion.div>
-            ) : viewMode === 'list' ? (
+            ) : (
               <motion.div
-                key="simplified-list"
+                key="catalog-content"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="space-y-6"
               >
-                <div className="flex items-center justify-between mb-8">
-                  <h2 className="text-3xl font-serif uppercase tracking-tighter">Поиск жилья</h2>
-                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-40">
-                    Найдено вариантов: {filteredObjects.length}
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  {filteredObjects.map(obj => (
-                    <motion.div
-                      key={obj.id}
-                      onClick={() => setSelectedObject(obj)}
-                      className="p-6 bg-white rounded-2xl border border-black/5 hover:border-accent-purple/30 hover:shadow-lg transition-all cursor-pointer group"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <h3 className="text-xl font-serif group-hover:text-accent-purple transition-colors">{obj.name}</h3>
-                        <div className="text-right">
-                          <div className="text-lg font-bold">₽{obj.price_per_night}</div>
-                          <div className="text-[8px] uppercase font-bold opacity-40 tracking-widest">за {t.night}</div>
+                {!showHero && (
+                  <section
+                    ref={assistantSectionRef}
+                    className={`max-w-5xl mx-auto mb-4 ${assistantOpen ? '' : 'hidden'}`}
+                  >
+                    <div className="rounded-[40px] border border-black/5 bg-gradient-to-br from-white via-[#FCFAFF] to-[#F3EEFF] shadow-xl shadow-accent-purple/5 p-6 md:p-8">
+                      <div className="flex items-center justify-between gap-4 mb-6">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-accent-purple/60 mb-2">Голосовой помощник</p>
+                          <h2 className="text-3xl md:text-4xl font-serif leading-none">Алиса для НавиКрым</h2>
+                        </div>
+                        <div className="hidden md:flex w-14 h-14 rounded-2xl bg-accent-purple text-white items-center justify-center shadow-lg shadow-accent-purple/20">
+                          <Sparkles size={26} />
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px] font-bold uppercase tracking-widest opacity-60">
-                        <div className="flex items-center gap-2">
-                          <MapPin size={12} className="text-accent-purple" />
-                          {CRIMEA_REGIONS.find(r => r.id === obj.region)?.name || obj.region}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Utensils size={12} className="text-blue-500" />
-                          {t.distanceToSea}: {obj.distance_to_sea || '—'}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Car size={12} className="text-emerald-500" />
-                          {t.distanceToStop}: {obj.distance_to_stop || '—'}
-                        </div>
-                        <div className="flex items-center gap-2 ml-auto">
-                          <Star size={12} className="text-amber-500" fill="currentColor" />
-                          4.9
-                        </div>
+                      <Suspense fallback={null}>
+                        <ExternalVoiceAssistant 
+                          onAction={handleAIAction}
+                          currentContext={{ 
+                            selectedRegion: selectedRegion ?? catalogRegionId,
+                            routePointsCount: routePoints.length,
+                            preferences,
+                            language: lang
+                          }}
+                          embedded
+                          title="Алиса"
+                          containerClassName="relative"
+                          panelClassName="relative w-full bg-white/80 backdrop-blur-sm rounded-[32px] shadow-none border border-accent-purple/10 overflow-hidden"
+                        />
+                      </Suspense>
+                    </div>
+                  </section>
+                )}
+                {assistantResults && (
+                  <section className="max-w-5xl mx-auto rounded-[32px] border border-black/5 bg-white p-6 md:p-8 shadow-sm">
+                    <div className="flex items-center justify-between mb-8 gap-4">
+                      <div>
+                        <h2 className="text-3xl font-serif uppercase tracking-tighter">Результаты подбора</h2>
+                        <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mt-2">
+                          {assistantResults.query ? `Запрос: ${assistantResults.query}` : 'Подобрано по диалогу с Алисой'}
+                        </p>
                       </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="regions-grid"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-8"
-              >
-                <div className="grid grid-cols-3 gap-2 md:gap-6">
-                  {CRIMEA_REGIONS.map(region => (
-                    <motion.div
-                      key={region.id}
-                      whileHover={{ y: -5 }}
-                      onClick={() => setSelectedRegion(region.id)}
-                      className="relative aspect-[4/3] rounded-xl md:rounded-[40px] overflow-hidden cursor-pointer group shadow-lg"
-                    >
-                      <img src={region.image} alt={region.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" referrerPolicy="no-referrer" />
-                      
-                      {/* Nested Photos Look */}
-                      <div className="absolute top-2 right-2 flex flex-col gap-1 md:top-4 md:right-4 md:gap-2">
-                        <div className="w-6 h-6 md:w-12 md:h-12 rounded-lg border-2 border-white shadow-lg overflow-hidden transform rotate-3 translate-x-1">
-                          <img src={`https://picsum.photos/seed/${region.id}nest1/200/200`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <button
+                        onClick={() => {
+                          setAssistantResults(null);
+                          setSearchQuery('');
+                          setBudgetMax(null);
+                          setSelectedRegion(null);
+                          setCatalogRegionId(null);
+                          setSelectedObject(null);
+                          setViewMode('grid');
+                        }}
+                        className="px-4 py-2 rounded-xl border border-black/10 text-[10px] font-bold uppercase tracking-widest hover:bg-black/5 transition-colors"
+                      >
+                        Сбросить подбор
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.9fr)] gap-6">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-xl font-serif">В базе НавиКрым</h3>
+                          <div className="text-[10px] font-bold uppercase tracking-widest opacity-40">
+                            Найдено: {assistantMatchedObjects.length}
+                          </div>
                         </div>
-                        <div className="w-6 h-6 md:w-12 md:h-12 rounded-lg border-2 border-white shadow-lg overflow-hidden transform -rotate-6 -translate-x-1">
-                          <img src={`https://picsum.photos/seed/${region.id}nest2/200/200`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        <div className="space-y-4">
+                          {assistantMatchedObjects.map(obj => (
+                            <motion.div
+                              key={`assistant-result-${obj.id}`}
+                              onClick={() => setSelectedObject(obj)}
+                              className="p-6 bg-white rounded-2xl border border-black/5 hover:border-accent-purple/30 hover:shadow-lg transition-all cursor-pointer group"
+                            >
+                              <div className="flex justify-between items-start mb-2 gap-4">
+                                <div>
+                                  <h3 className="text-xl font-serif group-hover:text-accent-purple transition-colors">{obj.name}</h3>
+                                  <p className="text-[10px] uppercase font-bold opacity-40 tracking-widest mt-1">{obj.type}</p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <div className="text-lg font-bold">₽{obj.price_per_night}</div>
+                                  <div className="text-[8px] uppercase font-bold opacity-40 tracking-widest">за {t.night}</div>
+                                </div>
+                              </div>
+                              <p className="text-sm opacity-60 mb-4 leading-relaxed">{obj.description}</p>
+                              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px] font-bold uppercase tracking-widest opacity-60">
+                                <div className="flex items-center gap-2">
+                                  <MapPin size={12} className="text-accent-purple" />
+                                  {CRIMEA_REGIONS.find(r => r.id === obj.region)?.name || obj.region}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Utensils size={12} className="text-blue-500" />
+                                  {t.distanceToSea}: {obj.distance_to_sea || '—'}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Car size={12} className="text-emerald-500" />
+                                  {t.distanceToStop}: {obj.distance_to_stop || '—'}
+                                </div>
+                              </div>
+                            </motion.div>
+                          ))}
+                          {assistantMatchedObjects.length === 0 && (
+                            <div className="text-center py-10 opacity-40 text-[10px] uppercase font-bold tracking-widest">{t.noObjects}</div>
+                          )}
                         </div>
                       </div>
 
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                      <div className="absolute bottom-2 left-3 md:bottom-6 md:left-8">
-                        <h3 className="text-white text-[8px] md:text-2xl font-serif">{region.name}</h3>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-xl font-serif">Из интернета и справки</h3>
+                          <div className="text-[10px] font-bold uppercase tracking-widest opacity-40">
+                            {assistantResults.externalResults.length}
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          {assistantResults.externalResults.map((item) => (
+                            <a
+                              key={item.id}
+                              href={item.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block p-4 rounded-2xl border border-black/5 hover:border-accent-purple/20 hover:bg-accent-purple/5 transition-colors"
+                            >
+                              <div className="text-[10px] font-bold uppercase tracking-widest text-accent-purple/70 mb-2">
+                                {item.category} · {item.source}
+                              </div>
+                              <h4 className="text-base font-bold mb-2">{item.title}</h4>
+                              <p className="text-sm opacity-60 leading-relaxed">{item.summary}</p>
+                            </a>
+                          ))}
+                          {assistantResults.externalResults.length === 0 && (
+                            <div className="text-center py-10 opacity-40 text-[10px] uppercase font-bold tracking-widest">
+                              Внешних рекомендаций пока нет
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </motion.div>
-                  ))}
-                </div>
+                    </div>
+                  </section>
+                )}
+
+                <section className="max-w-5xl mx-auto rounded-[32px] border border-black/5 bg-white p-6 md:p-8 shadow-sm">
+                  <div className="flex items-center justify-between mb-8">
+                    <h2 className="text-3xl font-serif uppercase tracking-tighter">
+                      {viewMode === 'grid' ? 'Регионы' : 'Результаты каталога'}
+                    </h2>
+                    <div className="text-[10px] font-bold uppercase tracking-widest opacity-40">
+                      {viewMode === 'grid' ? `Регионов: ${CRIMEA_REGIONS.length}` : `Найдено вариантов: ${filteredObjects.length}`}
+                    </div>
+                  </div>
+
+                  {viewMode === 'grid' ? (
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                      {CRIMEA_REGIONS.map(region => (
+                        <motion.div
+                          key={region.id}
+                          whileHover={{ y: -4 }}
+                          onClick={() => {
+                            setCatalogRegionId(null);
+                            setSelectedRegion(region.id);
+                          }}
+                          className="relative aspect-[4/3] rounded-xl md:rounded-[32px] overflow-hidden cursor-pointer group shadow-lg"
+                        >
+                          <img src={region.image} alt={region.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" referrerPolicy="no-referrer" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                          <div className="absolute bottom-3 left-4 md:bottom-6 md:left-6">
+                            <h3 className="text-white text-sm md:text-2xl font-serif">{region.name}</h3>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredObjects.map(obj => (
+                        <motion.div
+                          key={obj.id}
+                          onClick={() => setSelectedObject(obj)}
+                          className="p-6 bg-white rounded-2xl border border-black/5 hover:border-accent-purple/30 hover:shadow-lg transition-all cursor-pointer group"
+                        >
+                          <div className="flex justify-between items-start mb-2 gap-4">
+                            <div>
+                              <h3 className="text-xl font-serif group-hover:text-accent-purple transition-colors">{obj.name}</h3>
+                              <p className="text-[10px] uppercase font-bold opacity-40 tracking-widest mt-1">{obj.type}</p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <div className="text-lg font-bold">₽{obj.price_per_night}</div>
+                              <div className="text-[8px] uppercase font-bold opacity-40 tracking-widest">за {t.night}</div>
+                            </div>
+                          </div>
+                          <p className="text-sm opacity-60 mb-4 leading-relaxed">{obj.description}</p>
+                          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px] font-bold uppercase tracking-widest opacity-60">
+                            <div className="flex items-center gap-2">
+                              <MapPin size={12} className="text-accent-purple" />
+                              {CRIMEA_REGIONS.find(r => r.id === obj.region)?.name || obj.region}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Utensils size={12} className="text-blue-500" />
+                              {t.distanceToSea}: {obj.distance_to_sea || '—'}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Car size={12} className="text-emerald-500" />
+                              {t.distanceToStop}: {obj.distance_to_stop || '—'}
+                            </div>
+                            <div className="flex items-center gap-2 ml-auto">
+                              <Star size={12} className="text-amber-500" fill="currentColor" />
+                              4.9
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                      {filteredObjects.length === 0 && (
+                        <div className="text-center py-10 opacity-40 text-[10px] uppercase font-bold tracking-widest">{t.noObjects}</div>
+                      )}
+                    </div>
+                  )}
+                </section>
               </motion.div>
             )}
           </AnimatePresence>
@@ -5118,280 +5398,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Right Sidebar - Hidden on mobile, integrated into grid */}
-        <div className="hidden md:flex w-[20%] bg-[#F8F7F4] border-l border-black/5 flex-col relative overflow-hidden">
-          <div className="flex-1 relative overflow-hidden">
-            <div className="absolute top-4 left-0 right-0 text-center z-30 pointer-events-none">
-              <button 
-                onClick={() => setShowPresentation(true)}
-                className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-20 hover:opacity-100 transition-opacity pointer-events-auto"
-              >
-                Ссылка
-              </button>
-            </div>
-
-            <InteractiveMap 
-              objects={filteredObjects}
-              selectedObject={selectedObject}
-              onSelect={(obj: any) => {
-                setSelectedObject(obj);
-                setSelectedPOI(null);
-              }}
-              routePoints={calculateComplexRoute().sortedPoints}
-              nearbyPois={nearbyPois}
-              onSelectPOI={(poi: any) => {
-                setSelectedPOI(poi);
-                setSelectedObject(null);
-              }}
-              provider={mapProvider}
-              isCached={isCached}
-              onDownload={downloadForOffline}
-            />
-
-            {/* Navigation List for Offline */}
-            {isOffline && (
-              <div className="absolute top-12 left-2 right-2 z-[50] space-y-2">
-                <div className="p-3 bg-white/90 backdrop-blur-md rounded-2xl border border-black/5 shadow-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-[8px] font-bold uppercase tracking-widest opacity-40">{t.offlineNav}</h3>
-                    <div className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-[6px] font-bold uppercase tracking-widest">
-                      {t.offlineMode}
-                    </div>
-                  </div>
-                  <div className="space-y-1.5 max-h-[250px] overflow-y-auto no-scrollbar">
-                    {filteredObjects.map(obj => (
-                      <div 
-                        key={obj.id} 
-                        onClick={() => setSelectedObject(obj)}
-                        className="p-2 bg-white rounded-xl border border-black/5 flex items-center gap-2 hover:bg-purple-50 transition-colors cursor-pointer"
-                      >
-                        <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0">
-                          <img src={obj.image_url} alt={obj.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[9px] font-bold truncate">{obj.name}</div>
-                          <div className="text-[7px] opacity-40 uppercase font-bold tracking-widest">{obj.type}</div>
-                        </div>
-                        <div className="text-[9px] font-bold">₽{obj.price_per_night}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="p-4 bg-white border-t border-black/5 flex gap-1 z-10">
-            <div className="flex-1 py-2 rounded-xl text-[8px] font-bold uppercase tracking-widest transition-all border bg-accent-purple text-white border-accent-purple shadow-lg shadow-accent-purple/20 text-center">
-              Yandex Maps
-            </div>
-          </div>
-
-          <AnimatePresence>
-            {selectedObject && (
-              <motion.div 
-                initial={{ x: 300 }}
-                animate={{ x: 0 }}
-                exit={{ x: 300 }}
-                className="absolute inset-y-0 right-0 w-full md:w-[450px] bg-white shadow-2xl z-20 flex flex-col border-l border-accent-purple/10"
-              >
-                <div className="relative h-48">
-                  <img src={selectedObject.image_url} alt={selectedObject.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  <div className="absolute top-4 right-4 flex gap-2">
-                    <button 
-                      onClick={() => handleShare(selectedObject)} 
-                      className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition-colors"
-                      title={t.share}
-                    >
-                      <Share2 size={20} />
-                    </button>
-                    <button 
-                      onClick={() => setSelectedObject(null)} 
-                      className="p-2 bg-white/80 backdrop-blur-md rounded-full shadow-lg hover:bg-white transition-colors"
-                    >
-                      <X size={20} />
-                    </button>
-                  </div>
-                </div>
-                <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="text-xl font-serif mb-1">{selectedObject.name}</h3>
-                      <p className="text-xs opacity-40 uppercase font-bold tracking-widest">{selectedObject.type}</p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold">₽{selectedObject.price_per_night}</div>
-                      <div className="text-[10px] opacity-40 uppercase font-bold tracking-widest">за сутки</div>
-                    </div>
-                  </div>
-                  <p className="text-sm leading-relaxed opacity-60 mb-6">{selectedObject.description}</p>
-                  
-                  <button 
-                    onClick={() => handleVisit(selectedObject)}
-                    className="w-full py-4 mb-3 bg-emerald-50 text-emerald-600 rounded-2xl font-bold uppercase tracking-widest text-xs hover:bg-emerald-100 transition-all border border-emerald-100 flex items-center justify-center gap-2"
-                  >
-                    <CheckCircle2 size={14} />
-                    Я здесь был
-                  </button>
-
-                  <button 
-                    onClick={() => setShowConfirmModal(true)}
-                    className="w-full py-4 border border-accent-purple/30 text-accent-purple rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-accent-purple/5 active:bg-accent-purple active:text-white transition-all mb-3"
-                  >
-                    {t.checkAvailability}
-                  </button>
-
-                  <button 
-                    onClick={() => toggleRoutePoint(selectedObject)}
-                    className={`w-full py-4 rounded-xl font-bold uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-2 border ${routePoints.find(p => p.id === selectedObject.id) ? 'bg-red-50 text-red-600 border-red-100' : 'bg-accent-purple/5 text-accent-purple border-accent-purple/30 hover:bg-accent-purple/10'}`}
-                  >
-                    <Route size={14} />
-                    {routePoints.find(p => p.id === selectedObject.id) ? t.removeFromRoute : t.addToRoute}
-                  </button>
-
-                  {/* Nearby Suggestions */}
-                  <div className="mt-8 pt-8 border-t border-black/5">
-                    <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-4">{t.nearbyPois}</h4>
-                    <div className="space-y-3">
-                      {nearbyPois.filter(poi => {
-                        const d = Math.sqrt(Math.pow(poi.lat - selectedObject.lat, 2) + Math.pow(poi.lng - selectedObject.lng, 2));
-                        return d < 0.045;
-                      }).map(poi => (
-                        <div 
-                          key={poi.id} 
-                          onClick={() => setSelectedPOI(poi)}
-                          className="flex items-center gap-3 p-3 bg-purple-50/50 rounded-2xl border border-purple-100/50 cursor-pointer hover:bg-purple-100 transition-colors group"
-                        >
-                          <div className={`p-2 rounded-xl ${poi.type === 'gas' ? 'bg-red-100 text-red-600' : poi.type === 'restaurant' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
-                            {poi.type === 'gas' && <Fuel size={14} />}
-                            {poi.type === 'restaurant' && <Utensils size={14} />}
-                            {poi.type === 'attraction' && <Camera size={14} />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold truncate">{poi.name}</p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-[8px] uppercase opacity-40 font-bold tracking-tighter">{poi.type}</p>
-                              <div className="w-1 h-1 bg-black/10 rounded-full" />
-                              <p className="text-[8px] font-bold text-purple-600">{(Math.sqrt(Math.pow(poi.lat - selectedObject.lat, 2) + Math.pow(poi.lng - selectedObject.lng, 2)) * 111).toFixed(1)} км</p>
-                            </div>
-                          </div>
-                          <ChevronRight size={14} className="opacity-0 group-hover:opacity-40 transition-opacity" />
-                        </div>
-                      ))}
-                      {nearbyPois.filter(poi => {
-                        const d = Math.sqrt(Math.pow(poi.lat - selectedObject.lat, 2) + Math.pow(poi.lng - selectedObject.lng, 2));
-                        return d < 0.045;
-                      }).length === 0 && (
-                        <p className="text-[10px] opacity-40 italic">Ничего не найдено поблизости</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Reviews Section */}
-                  <div className="mt-8 pt-8 border-t border-black/5">
-                    <div className="flex items-center justify-between mb-6">
-                      <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40">{t.reviews}</h4>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-0.5">
-                          {[...Array(5)].map((_, i) => (
-                            <Star 
-                              key={i} 
-                              size={10} 
-                              className={i < Math.round(mockReviews.reduce((acc, r) => acc + r.rating, 0) / mockReviews.length) ? "text-amber-400 fill-amber-400" : "text-black/10"} 
-                            />
-                          ))}
-                        </div>
-                        <span className="text-xs font-bold">{(mockReviews.reduce((acc, r) => acc + r.rating, 0) / mockReviews.length).toFixed(1)}</span>
-                        <span className="text-[10px] opacity-40">({mockReviews.length})</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      {mockReviews.map(review => (
-                        <div key={review.id} className="p-4 bg-black/5 rounded-2xl border border-black/5">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <img 
-                                src={`https://picsum.photos/seed/${review.user}/40/40`} 
-                                alt={review.user} 
-                                className="w-8 h-8 rounded-full border border-white shadow-sm"
-                                referrerPolicy="no-referrer"
-                              />
-                              <div>
-                                <p className="text-[10px] font-bold">{review.user}</p>
-                                <p className="text-[8px] opacity-40">{review.date}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-0.5">
-                              {[...Array(5)].map((_, i) => (
-                                <Star 
-                                  key={i} 
-                                  size={8} 
-                                  className={i < review.rating ? "text-amber-400 fill-amber-400" : "text-black/10"} 
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          <p className="text-[11px] leading-relaxed opacity-70 mb-3">{review.text}</p>
-                          <div className="flex justify-end">
-                            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-full text-[9px] font-bold uppercase tracking-widest hover:bg-black/5 transition-colors border border-black/5">
-                              <ThumbsUp size={10} />
-                              {t.helpful} ({review.helpful})
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence>
-            {selectedPOI && (
-              <motion.div 
-                initial={{ x: 300 }}
-                animate={{ x: 0 }}
-                exit={{ x: 300 }}
-                className="absolute inset-y-0 right-0 w-full bg-white shadow-2xl z-20 flex flex-col"
-              >
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-3 rounded-2xl ${selectedPOI.type === 'gas' ? 'bg-red-50 text-red-500' : selectedPOI.type === 'restaurant' ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'}`}>
-                        {selectedPOI.type === 'gas' && <Fuel size={24} />}
-                        {selectedPOI.type === 'restaurant' && <Utensils size={24} />}
-                        {selectedPOI.type === 'attraction' && <Camera size={24} />}
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-black/40 mb-1 block">{selectedPOI.type}</span>
-                        <h2 className="font-serif text-xl">{selectedPOI.name}</h2>
-                      </div>
-                    </div>
-                    <button onClick={() => setSelectedPOI(null)} className="p-2 hover:bg-black/5 rounded-full"><X size={20} /></button>
-                  </div>
-                  
-                  <button 
-                    onClick={() => handleVisit(selectedPOI)}
-                    className="w-full py-4 mb-3 bg-emerald-50 text-emerald-600 rounded-2xl font-bold uppercase tracking-widest text-xs hover:bg-emerald-100 transition-all border border-emerald-100 flex items-center justify-center gap-2"
-                  >
-                    <CheckCircle2 size={14} />
-                    Я здесь был
-                  </button>
-
-                  <button 
-                    onClick={() => toggleRoutePoint(selectedPOI)}
-                    className={`w-full py-4 rounded-2xl font-bold uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-2 ${routePoints.find(p => p.id === selectedPOI.id) ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-purple-50 text-purple-600 border border-purple-100'}`}
-                  >
-                    <Route size={14} />
-                    {routePoints.find(p => p.id === selectedPOI.id) ? t.removeFromRoute : t.addToRoute}
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
       </main>
 
       {/* Footer / Status Bar */}
@@ -5472,10 +5478,10 @@ export default function App() {
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             />
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="relative bg-white rounded-[40px] shadow-2xl border border-black/5 w-full max-w-md overflow-hidden"
+              initial={{ scale: 0.96, opacity: 0, x: -80 }}
+              animate={{ scale: 1, opacity: 1, x: 0 }}
+              exit={{ scale: 0.96, opacity: 0, x: -80 }}
+              className="relative bg-white rounded-[40px] shadow-2xl border border-black/5 w-full max-w-md max-h-[88vh] overflow-y-auto custom-scrollbar"
             >
               <div className="p-8">
                 <div className="flex justify-between items-start mb-8">
@@ -5646,10 +5652,10 @@ export default function App() {
             className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm"
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-4xl bg-white rounded-[40px] overflow-hidden relative"
+              initial={{ scale: 0.96, opacity: 0, x: -80 }}
+              animate={{ scale: 1, opacity: 1, x: 0 }}
+              exit={{ scale: 0.96, opacity: 0, x: -80 }}
+              className="w-full max-w-4xl max-h-[88vh] bg-white rounded-[40px] overflow-y-auto custom-scrollbar relative"
             >
               <button 
                 onClick={() => setShowPhotoGallery(false)}

@@ -1,7 +1,7 @@
 export interface AIResponse {
   text: string;
   actions?: {
-    type: 'update_preferences' | 'add_route_point' | 'show_region';
+    type: 'update_preferences' | 'add_route_point' | 'show_region' | 'search_objects' | 'set_view_mode' | 'focus_object';
     payload: any;
   }[];
 }
