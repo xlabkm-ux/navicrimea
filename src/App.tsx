@@ -18,6 +18,7 @@
  */
 
 import React, { lazy, Suspense, useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Map as MapIcon, 
   List, 
@@ -1616,6 +1617,7 @@ export default function App() {
         setEndDate(null);
       } else if (date > startDate) {
         setEndDate(date);
+        setShowDatePicker(false);
       } else {
         setStartDate(date);
         setEndDate(null);
@@ -1668,8 +1670,8 @@ export default function App() {
       return days;
     };
 
-    return (
-      <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
+    const modal = (
+      <div className="fixed inset-0 z-[210] grid place-items-center p-4">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -1718,6 +1720,7 @@ export default function App() {
         </motion.div>
       </div>
     );
+    return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
   };
 
   const DestinationPicker = () => {
@@ -1726,7 +1729,7 @@ export default function App() {
       city.districts.some(d => d.toLowerCase().includes(searchDestination.toLowerCase()))
     );
 
-    return (
+    const modal = (
       <div className="fixed inset-0 z-[210] flex items-center justify-center p-4">
         <motion.div
           initial={{ opacity: 0 }}
@@ -1795,6 +1798,7 @@ export default function App() {
         </motion.div>
       </div>
     );
+    return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
   };
 
   const [isVip, setIsVip] = useState(false);
@@ -4804,7 +4808,7 @@ export default function App() {
                 {showDestinationPicker && <DestinationPicker />}
               </AnimatePresence>
             </div>
-            <div className="relative flex items-center px-4 border-r border-gray-200 cursor-pointer hover:bg-gray-50 flex-1" onClick={() => setShowDatePicker(!showDatePicker)}>
+            <div className="relative flex items-center px-4 border-r border-gray-200 cursor-pointer hover:bg-gray-50 flex-1" onClick={() => setShowDatePicker(true)}>
               <Calendar size={18} className="text-gray-400 mr-3" />
               <div className="flex flex-col py-3 overflow-hidden">
                 <span className="text-[11px] font-bold uppercase tracking-widest text-gray-600 whitespace-nowrap">
