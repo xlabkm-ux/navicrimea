@@ -371,7 +371,6 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
         conversation,
       });
       const assistantText = response.text?.trim() || 'Я подобрала варианты и вывела результаты ниже.';
-      setLastResponse(assistantText);
       setMessages((prev) => [
         ...prev,
         { id: `assistant-${Date.now()}`, role: 'assistant', text: assistantText },

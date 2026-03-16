@@ -4971,7 +4971,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <main className="pt-28 lg:pt-40 min-h-screen flex flex-col md:flex-row">
+      <main className="pt-28 lg:pt-32 min-h-screen bg-white flex flex-col md:flex-row">
         {/* Impressions Sidebar */}
         <AnimatePresence>
           {showImpressions && (
