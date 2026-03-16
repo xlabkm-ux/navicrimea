@@ -6,9 +6,20 @@ import { externalAI, AIResponse } from '../services/externalAI';
 interface ExternalVoiceAssistantProps {
   onAction: (action: any) => void;
   currentContext: any;
+  containerClassName?: string;
+  panelClassName?: string;
+  triggerClassName?: string;
+  compact?: boolean;
 }
 
-export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({ onAction, currentContext }) => {
+export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
+  onAction,
+  currentContext,
+  containerClassName = 'fixed bottom-8 left-8 z-[100]',
+  panelClassName = 'absolute bottom-20 left-0 w-80 bg-white rounded-[32px] shadow-2xl border border-accent-purple/10 overflow-hidden',
+  triggerClassName,
+  compact = false,
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -181,14 +192,14 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({ 
   };
 
   return (
-    <div className="fixed bottom-8 left-8 z-[100]">
+    <div className={containerClassName}>
       <AnimatePresence>
         {isOpen && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="absolute bottom-20 left-0 w-80 bg-white rounded-[32px] shadow-2xl border border-accent-purple/10 overflow-hidden"
+            className={panelClassName}
           >
             <div className="p-6 space-y-4">
               <div className="flex items-center justify-between">
@@ -265,11 +276,12 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({ 
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all ${
+        className={triggerClassName ?? `${compact ? 'h-11 px-4 rounded-xl gap-2 text-[11px] font-bold uppercase tracking-widest' : 'w-14 h-14 rounded-full'} flex items-center justify-center shadow-2xl transition-all ${
           isOpen ? 'bg-white text-accent-purple border border-accent-purple/20' : 'bg-accent-purple text-white shadow-accent-purple/30'
         }`}
       >
-        {isOpen ? <MessageSquare size={20} /> : <Sparkles size={20} />}
+        {isOpen ? <MessageSquare size={compact ? 16 : 20} /> : <Sparkles size={compact ? 16 : 20} />}
+        {compact && <span>ИИ Алиса</span>}
       </motion.button>
     </div>
   );

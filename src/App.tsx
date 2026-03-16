@@ -4528,16 +4528,21 @@ export default function App() {
             routePointsCount: routePoints.length,
             preferences,
             language: lang
-          }} 
+          }}
+          containerClassName="hidden"
         />
       </Suspense>
 
       {/* Navigation Rail */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-accent-purple/10 px-4 md:px-6 py-2 flex flex-col">
-        <div className="flex items-center justify-between h-12 gap-3">
+        <div className="flex items-center justify-between min-h-12 gap-3 flex-wrap">
           <div className="flex items-center gap-2 md:gap-4 shrink-0">
             <div className="flex items-center gap-2 cursor-pointer group" onClick={() => { setShowHero(true); setSelectedRegion(null); }}>
-              <div className="w-8 h-8 bg-gradient-to-br from-accent-purple to-pink-500 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-accent-purple/20 group-hover:scale-110 transition-transform">Н</div>
+              <img
+                src="/navicrimea-emblem.png"
+                alt="Герб НавиКрым"
+                className="w-8 h-8 rounded-lg object-cover shadow-lg shadow-accent-purple/15 group-hover:scale-110 transition-transform"
+              />
               <span className="font-bold tracking-tight text-lg xl:text-[1.35rem] logo-gradient whitespace-nowrap">НавиКрым</span>
             </div>
 
@@ -4549,6 +4554,21 @@ export default function App() {
               <span className="hidden xs:inline">{t.cabinet}</span>
             </button>
 
+            <Suspense fallback={null}>
+              <ExternalVoiceAssistant 
+                onAction={handleAIAction}
+                currentContext={{ 
+                  selectedRegion, 
+                  routePointsCount: routePoints.length,
+                  preferences,
+                  language: lang
+                }}
+                containerClassName="relative hidden lg:block"
+                panelClassName="absolute top-full left-0 mt-3 w-80 bg-white rounded-[32px] shadow-2xl border border-accent-purple/10 overflow-hidden z-[110]"
+                compact
+              />
+            </Suspense>
+
             <button 
               onClick={() => setShowAboutUs(true)}
               className="nav-meta nav-pill hidden lg:flex items-center gap-2 px-3 py-2 text-black/60 hover:text-black transition-colors font-semibold"
@@ -4557,10 +4577,13 @@ export default function App() {
               {t.aboutUs}
             </button>
 
+          </div>
+
+          <div className="flex items-center gap-2 md:gap-3 shrink-0">
             <div className="relative hidden lg:block">
               <button 
                 onClick={() => setShowPartnerMenu(!showPartnerMenu)}
-                className={`nav-meta nav-pill flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all border ${showPartnerMenu ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-transparent text-black/60 hover:text-black'}`}
+                className={`nav-meta nav-pill flex items-center gap-2 px-3 py-2 rounded-xl font-semibold transition-all border bg-white ${showPartnerMenu ? 'border-accent-purple text-accent-purple' : 'border-accent-purple/15 text-black/70 hover:text-black hover:border-accent-purple/30'}`}
               >
                 <Handshake size={14} />
                 {t.partnerProgram}
@@ -4572,7 +4595,7 @@ export default function App() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className="absolute left-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-black/5 overflow-hidden z-[60] py-2"
+                    className="absolute right-0 mt-2 w-56 bg-white opacity-100 rounded-2xl shadow-2xl border border-black/10 overflow-hidden z-[60] py-2 backdrop-blur-none"
                   >
                     {(['tourist', 'hotelier', 'ministry', 'inspector'] as const).map(role => (
                       <button
@@ -4587,7 +4610,7 @@ export default function App() {
                             else setActiveCabinetTab('listings');
                           }
                         }}
-                        className={`w-full px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center justify-between ${userRole === role ? 'bg-accent-purple/10 text-accent-purple' : 'hover:bg-black/5 text-black/60'}`}
+                        className={`w-full px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center justify-between ${userRole === role ? 'bg-accent-purple/10 text-accent-purple' : 'hover:bg-black/5 text-black/70'}`}
                       >
                         <div className="flex items-center gap-3">
                           {role === 'tourist' && <User size={14} />}
@@ -4603,92 +4626,7 @@ export default function App() {
                 )}
               </AnimatePresence>
             </div>
-          </div>
 
-          <div className="nav-menu hidden xl:flex flex-1 min-w-0 items-center justify-center gap-1.5 2xl:gap-3 font-semibold text-black/88">
-            <div className="relative z-[90]">
-              <button 
-                onClick={() => setViewModeMenuOpen(!viewModeMenuOpen)}
-                className={`nav-menu-item compact flex items-center gap-2 px-3 2xl:px-4 py-2 rounded-xl border transition-all ${viewModeMenuOpen ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-accent-purple/15 text-black/62 hover:text-black hover:bg-accent-purple/5'}`}
-              >
-                {viewMode === 'grid' ? <Layers size={14} /> : <List size={14} />}
-                {viewMode === 'grid' ? (t.regions || 'Регионы') : t.list}
-                <ChevronDown size={12} className={`transition-transform ${viewModeMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
-              <AnimatePresence>
-                {viewModeMenuOpen && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    className="absolute left-0 mt-3 min-w-[13rem] bg-white/98 backdrop-blur-xl rounded-2xl shadow-2xl border border-black/5 overflow-hidden z-[100] py-2"
-                  >
-                    <button
-                      onClick={() => {
-                        setViewMode('grid');
-                        setViewModeMenuOpen(false);
-                      }}
-                      className={`w-full text-left px-4 py-3 nav-meta font-bold uppercase transition-colors flex items-center justify-between ${viewMode === 'grid' ? 'bg-accent-purple/10 text-accent-purple' : 'hover:bg-black/5 text-black/60'}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Layers size={14} />
-                        {t.regions || 'Регионы'}
-                      </div>
-                      {viewMode === 'grid' && <Check size={12} />}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setViewMode('list');
-                        setViewModeMenuOpen(false);
-                      }}
-                      className={`w-full text-left px-4 py-3 nav-meta font-bold uppercase transition-colors flex items-center justify-between ${viewMode === 'list' ? 'bg-accent-purple/10 text-accent-purple' : 'hover:bg-black/5 text-black/60'}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <List size={14} />
-                        {t.list}
-                      </div>
-                      {viewMode === 'list' && <Check size={12} />}
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-            <button 
-              onClick={() => setShowRoutePlanner(!showRoutePlanner)}
-              className={`nav-menu-item compact transition-all flex items-center gap-2 px-3 2xl:px-4 py-2 rounded-xl border ${showRoutePlanner ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-transparent hover:bg-black/5'}`}
-            >
-              {t.routes}
-              {isVip && (
-                <span className="bg-amber-400 text-amber-900 px-1.5 py-0.5 rounded text-[8px] font-black tracking-tighter shadow-sm">
-                  VIP
-                </span>
-              )}
-              {routePoints.length > 0 && (
-                <span className="bg-purple-600 text-white w-4 h-4 rounded-full flex items-center justify-center text-[8px] animate-pulse">
-                  {routePoints.length}
-                </span>
-              )}
-            </button>
-            <button 
-              onClick={() => {
-                setShowImpressions(true);
-                setShowRoutePlanner(false);
-                setShowCompanionFinder(false);
-              }}
-              className={`nav-menu-item compact transition-all flex items-center gap-2 px-3 2xl:px-4 py-2 rounded-xl border ${showImpressions ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-transparent hover:bg-black/5'}`}
-            >
-              {t.experiences}
-            </button>
-            <button 
-              onClick={() => setShowCompanionFinder(true)}
-              className={`nav-menu-item compact transition-all flex items-center gap-2 px-3 2xl:px-4 py-2 rounded-xl border ${showCompanionFinder ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-transparent hover:bg-black/5'}`}
-            >
-              {t.findCompanion}
-            </button>
-            <a href="#" className="nav-menu-item compact inline-flex items-center px-3 2xl:px-4 py-2 rounded-xl hover:bg-black/5 transition-colors">{t.safety}</a>
-          </div>
-
-          <div className="flex items-center gap-2 md:gap-3 shrink-0">
             {/* Language Selector */}
             <div className="relative">
               <button 
@@ -4734,6 +4672,89 @@ export default function App() {
               {isCaching ? <RefreshCw size={18} className="animate-spin" /> : <CloudDownload size={18} />}
             </button>
           </div>
+        </div>
+
+        <div className="nav-menu hidden lg:flex items-center justify-center gap-1.5 2xl:gap-3 font-semibold text-black/88 mt-2 flex-wrap">
+          <div className="relative z-[90]">
+            <button 
+              onClick={() => setViewModeMenuOpen(!viewModeMenuOpen)}
+              className={`nav-menu-item compact flex items-center gap-2 px-3 2xl:px-4 py-2 rounded-xl border transition-all ${viewModeMenuOpen ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-accent-purple/15 text-black/62 hover:text-black hover:bg-accent-purple/5'}`}
+            >
+              {viewMode === 'grid' ? <Layers size={14} /> : <List size={14} />}
+              {viewMode === 'grid' ? (t.regions || 'Регионы') : t.list}
+              <ChevronDown size={12} className={`transition-transform ${viewModeMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+            <AnimatePresence>
+              {viewModeMenuOpen && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute left-0 mt-3 min-w-[13rem] bg-white/98 backdrop-blur-xl rounded-2xl shadow-2xl border border-black/5 overflow-hidden z-[100] py-2"
+                >
+                  <button
+                    onClick={() => {
+                      setViewMode('grid');
+                      setViewModeMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-3 nav-meta font-bold uppercase transition-colors flex items-center justify-between ${viewMode === 'grid' ? 'bg-accent-purple/10 text-accent-purple' : 'hover:bg-black/5 text-black/60'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Layers size={14} />
+                      {t.regions || 'Регионы'}
+                    </div>
+                    {viewMode === 'grid' && <Check size={12} />}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setViewMode('list');
+                      setViewModeMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-3 nav-meta font-bold uppercase transition-colors flex items-center justify-between ${viewMode === 'list' ? 'bg-accent-purple/10 text-accent-purple' : 'hover:bg-black/5 text-black/60'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <List size={14} />
+                      {t.list}
+                    </div>
+                    {viewMode === 'list' && <Check size={12} />}
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          <button 
+            onClick={() => setShowRoutePlanner(!showRoutePlanner)}
+            className={`nav-menu-item compact transition-all flex items-center gap-2 px-3 2xl:px-4 py-2 rounded-xl border ${showRoutePlanner ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-transparent hover:bg-black/5'}`}
+          >
+            {t.routes}
+            {isVip && (
+              <span className="bg-amber-400 text-amber-900 px-1.5 py-0.5 rounded text-[8px] font-black tracking-tighter shadow-sm">
+                VIP
+              </span>
+            )}
+            {routePoints.length > 0 && (
+              <span className="bg-purple-600 text-white w-4 h-4 rounded-full flex items-center justify-center text-[8px] animate-pulse">
+                {routePoints.length}
+              </span>
+            )}
+          </button>
+          <button 
+            onClick={() => {
+              setShowImpressions(true);
+              setShowRoutePlanner(false);
+              setShowCompanionFinder(false);
+            }}
+            className={`nav-menu-item compact transition-all flex items-center gap-2 px-3 2xl:px-4 py-2 rounded-xl border ${showImpressions ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-transparent hover:bg-black/5'}`}
+          >
+            {t.experiences}
+          </button>
+          <button 
+            onClick={() => setShowCompanionFinder(true)}
+            className={`nav-menu-item compact transition-all flex items-center gap-2 px-3 2xl:px-4 py-2 rounded-xl border ${showCompanionFinder ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-transparent hover:bg-black/5'}`}
+          >
+            {t.findCompanion}
+          </button>
+          <a href="#" className="nav-menu-item compact inline-flex items-center px-3 2xl:px-4 py-2 rounded-xl hover:bg-black/5 transition-colors">{t.safety}</a>
         </div>
 
         {/* Booking-style Search Bar */}
@@ -4792,7 +4813,7 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="pt-32 lg:pt-36 h-[calc(100vh-128px)] flex flex-col md:flex-row overflow-hidden">
+      <main className="pt-32 lg:pt-52 min-h-screen flex flex-col md:flex-row">
         {/* Impressions Sidebar */}
         <AnimatePresence>
           {showImpressions && (
@@ -4800,7 +4821,7 @@ export default function App() {
               initial={{ x: -400 }}
               animate={{ x: 0 }}
               exit={{ x: -400 }}
-              className="fixed left-0 top-32 lg:top-36 bottom-8 w-[400px] bg-white shadow-2xl z-[45] border-r border-black/5 flex flex-col"
+              className="fixed left-0 top-32 lg:top-52 bottom-0 w-[400px] bg-white shadow-2xl z-[45] border-r border-black/5 flex flex-col"
             >
               <Suspense fallback={<LazyPanelFallback />}>
                 <ImpressionsManager 
@@ -4824,7 +4845,7 @@ export default function App() {
               initial={{ x: -400 }}
               animate={{ x: 0 }}
               exit={{ x: -400 }}
-              className="fixed left-0 top-32 lg:top-36 bottom-0 w-full md:w-[400px] bg-white shadow-2xl z-[45] border-r border-accent-purple/10 flex flex-col"
+              className="fixed left-0 top-32 lg:top-52 bottom-0 w-full md:w-[400px] bg-white shadow-2xl z-[45] border-r border-accent-purple/10 flex flex-col"
             >
               <Suspense fallback={<LazyPanelFallback />}>
                 <AIVoiceRoutePlanner 
@@ -4877,7 +4898,7 @@ export default function App() {
         </div>
 
         {/* Center - Regions Grid or Region Details or Simplified List */}
-        <div className="flex-1 bg-white overflow-y-auto custom-scrollbar p-4 md:p-8">
+        <div className="flex-1 bg-white p-4 md:p-8">
           <AnimatePresence mode="wait">
             {selectedRegion ? (
               <motion.div
@@ -5374,7 +5395,7 @@ export default function App() {
       </main>
 
       {/* Footer / Status Bar */}
-      <footer className="fixed bottom-0 left-0 right-0 h-8 bg-white border-t border-black/5 px-6 flex items-center justify-between text-[10px] font-medium uppercase tracking-widest opacity-40 z-50">
+      <footer className="bg-white border-t border-black/5 px-4 md:px-6 py-3 flex flex-col gap-2 md:h-8 md:flex-row md:items-center md:justify-between text-[10px] font-medium uppercase tracking-widest opacity-40">
         <div className="flex gap-4 items-center">
           {isOffline ? (
             <div className="flex items-center gap-1 text-red-500 font-bold">
