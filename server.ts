@@ -64,19 +64,19 @@ db.exec(`
 
 const discoveryContent = {
   routes: [
-    { id: 'route-bolshaya-sevastopolskaya', title: 'Большая севастопольская прогулка', category: 'Маршрут', source: 'НавиКрым Guide', summary: 'Набережная, Херсонес и Балаклава в одном дне.', details: 'Маршрут подходит для первого знакомства с городом.', url: 'https://travel.example/crimea/sevastopol-walk' },
-    { id: 'route-fiolent', title: 'Фиолент и Яшмовый пляж', category: 'Природа', source: 'НавиКрым Guide', summary: 'Смотровые площадки, монастырь и спуск к морю.', details: 'Нужна удобная обувь и запас воды.', url: 'https://travel.example/crimea/fiolent-jasper' },
-    { id: 'route-sudak-novy-svet', title: 'Судак и тропа Голицына', category: 'Треккинг', source: 'НавиКрым Guide', summary: 'Крепость, набережная и тропа вдоль бухт.', details: 'Лучше планировать на целый день.', url: 'https://travel.example/crimea/sudak-novy-svet' },
+    { id: 'route-bolshaya-sevastopolskaya', title: 'Большая севастопольская прогулка', category: 'Маршрут', source: 'Навигатор Крым Guide', summary: 'Набережная, Херсонес и Балаклава в одном дне.', details: 'Маршрут подходит для первого знакомства с городом.', url: 'https://travel.example/crimea/sevastopol-walk' },
+    { id: 'route-fiolent', title: 'Фиолент и Яшмовый пляж', category: 'Природа', source: 'Навигатор Крым Guide', summary: 'Смотровые площадки, монастырь и спуск к морю.', details: 'Нужна удобная обувь и запас воды.', url: 'https://travel.example/crimea/fiolent-jasper' },
+    { id: 'route-sudak-novy-svet', title: 'Судак и тропа Голицына', category: 'Треккинг', source: 'Навигатор Крым Guide', summary: 'Крепость, набережная и тропа вдоль бухт.', details: 'Лучше планировать на целый день.', url: 'https://travel.example/crimea/sudak-novy-svet' },
   ],
   experiences: [
-    { id: 'exp-yalta-gastro', title: 'Гастро-вечер в Ялте', category: 'Впечатление', source: 'НавиКрым Picks', summary: 'Набережная, локальная кухня и видовые точки.', details: 'Подойдет для неспешного вечера у моря.', url: 'https://travel.example/crimea/yalta-evening' },
-    { id: 'exp-bakhchisaray', title: 'День в Бахчисарае', category: 'Культура', source: 'НавиКрым Picks', summary: 'Ханский дворец, старый город и кофейни.', details: 'Хороший вариант для культурной программы.', url: 'https://travel.example/crimea/bakhchisaray-day' },
-    { id: 'exp-koktebel', title: 'Коктебель: море и арт-среда', category: 'Отдых', source: 'НавиКрым Picks', summary: 'Пляж, прогулка по побережью и закат.', details: 'Летний сценарий без сложной логистики.', url: 'https://travel.example/crimea/koktebel-seaside' },
+    { id: 'exp-yalta-gastro', title: 'Гастро-вечер в Ялте', category: 'Впечатление', source: 'Навигатор Крым Picks', summary: 'Набережная, локальная кухня и видовые точки.', details: 'Подойдет для неспешного вечера у моря.', url: 'https://travel.example/crimea/yalta-evening' },
+    { id: 'exp-bakhchisaray', title: 'День в Бахчисарае', category: 'Культура', source: 'Навигатор Крым Picks', summary: 'Ханский дворец, старый город и кофейни.', details: 'Хороший вариант для культурной программы.', url: 'https://travel.example/crimea/bakhchisaray-day' },
+    { id: 'exp-koktebel', title: 'Коктебель: море и арт-среда', category: 'Отдых', source: 'Навигатор Крым Picks', summary: 'Пляж, прогулка по побережью и закат.', details: 'Летний сценарий без сложной логистики.', url: 'https://travel.example/crimea/koktebel-seaside' },
   ],
   safety: [
-    { id: 'safe-weather', title: 'Погода и жара перед поездкой', category: 'Безопасность', source: 'НавиКрым Advisory', summary: 'Проверяйте температуру, ветер и штормовые предупреждения.', details: 'Важно смотреть не только температуру, но и УФ-индекс.', url: 'https://travel.example/crimea/weather-safety' },
-    { id: 'safe-roads', title: 'Дороги и время в пути', category: 'Логистика', source: 'НавиКрым Advisory', summary: 'Закладывайте запас времени на серпантины и сезонную нагрузку.', details: 'Лучше выезжать рано утром и иметь офлайн-карту.', url: 'https://travel.example/crimea/road-safety' },
-    { id: 'safe-hiking', title: 'Безопасность на тропах', category: 'Трекинг', source: 'НавиКрым Advisory', summary: 'Вода, нескользящая обувь и расчет времени до заката.', details: 'Для новых маршрутов лучше выбирать популярные направления.', url: 'https://travel.example/crimea/trail-safety' },
+    { id: 'safe-weather', title: 'Погода и жара перед поездкой', category: 'Безопасность', source: 'Навигатор Крым Advisory', summary: 'Проверяйте температуру, ветер и штормовые предупреждения.', details: 'Важно смотреть не только температуру, но и УФ-индекс.', url: 'https://travel.example/crimea/weather-safety' },
+    { id: 'safe-roads', title: 'Дороги и время в пути', category: 'Логистика', source: 'Навигатор Крым Advisory', summary: 'Закладывайте запас времени на серпантины и сезонную нагрузку.', details: 'Лучше выезжать рано утром и иметь офлайн-карту.', url: 'https://travel.example/crimea/road-safety' },
+    { id: 'safe-hiking', title: 'Безопасность на тропах', category: 'Трекинг', source: 'Навигатор Крым Advisory', summary: 'Вода, нескользящая обувь и расчет времени до заката.', details: 'Для новых маршрутов лучше выбирать популярные направления.', url: 'https://travel.example/crimea/trail-safety' },
   ],
 } as const;
 
@@ -167,7 +167,7 @@ const getYandexFolderId = () =>
 const getYandexGptModel = () => getConfig('YANDEX_GPT_MODEL') || 'yandexgpt-lite';
 const getYandexTtsVoice = () => getConfig('YANDEX_TTS_VOICE') || 'alena';
 const assistantInstruction =
-  'Ты — Алиса, голосовой помощник туристической платформы НавиКрым. Ты помогаешь путешественникам по Крыму находить и сравнивать туристические ресурсы: гостиницы, отели, апартаменты, квартиры для аренды, такси, рестораны, столовые, развлечения, экскурсии, музеи, выставки и сопутствующие сервисы. Всегда отвечай на русском языке, коротко, понятно и практично, с акцентом на конкретные варианты для поездки. Не выдумывай факты и прямо сообщай, если данных недостаточно. Всегда говори от женского лица независимо от запроса пользователя: используй формы «нашла», «подобрала», «рекомендую», «могу предложить» и избегай мужских форм.';
+  'Ты — Алиса, голосовой помощник туристической платформы Навигатор Крым. Ты помогаешь путешественникам по Крыму находить и сравнивать туристические ресурсы: гостиницы, отели, апартаменты, квартиры для аренды, такси, рестораны, столовые, развлечения, экскурсии, музеи, выставки и сопутствующие сервисы. Всегда отвечай на русском языке, коротко, понятно и практично, с акцентом на конкретные варианты для поездки. Не выдумывай факты и прямо сообщай, если данных недостаточно. Всегда говори от женского лица независимо от запроса пользователя: используй формы «нашла», «подобрала», «рекомендую», «могу предложить» и избегай мужских форм.';
 
 const regionAliases: Record<string, string[]> = {
   yalta: ['ялта', 'yalta'],

@@ -282,7 +282,7 @@ const translations: Record<Language, any> = {
     routeSummary: 'Резюме маршрута',
     priceVerified: 'Цена проверена сообществом',
     safeDeal: 'Безопасная сделка',
-    escrowAgent: 'Эскроу-агент: ООО "НавиКрым"',
+    escrowAgent: 'Эскроу-агент: ООО "Навигатор Крым"',
     guarantee: 'Средства защищены до подтверждения заселения',
     openDispute: 'Открыть спор',
     notes: 'Заметки для владельца или провайдера',
@@ -480,7 +480,7 @@ const translations: Record<Language, any> = {
     migrationControl: 'Миграционный контроль',
     aboutUs: 'О нас',
     partnerProgram: 'Партнерская программа',
-    manifestoTitle: 'МАНИФЕСТ ЭКОСИСТЕМЫ «НАВИКРЫМ»',
+    manifestoTitle: 'МАНИФЕСТ ЭКОСИСТЕМЫ «НАВИГАТОР КРЫМ»',
     manifestoSubtitle: 'От хаоса «дикого» туризма к цифровому государству будущего',
     manifestoText: `1. Наша Миссия
 Мы не создаем «еще один сайт для бронирования». Мы строим Цифровую Операционную Систему Региона. Наша цель — превратить Крым в мировой стандарт travel-индустрии, используя технологии как мост между интересами Гражданина, Бизнеса и Государства.
@@ -524,7 +524,7 @@ III. ПОДДЕРЖКА И РАЗВИТИЕ (Инвестиции в рост)
 Фиксированная цена успеха: 500 рублей за счастливого туриста. Это прозрачно, честно и выгодно всем.
 Результат: 100% контроль турпотока, рост налоговых поступлений и Крым, в который хочется возвращаться.
 
-ЭПИЛОГ: НавиКрым — это точка сборки.
+ЭПИЛОГ: Навигатор Крым — это точка сборки.
 Мы объединяем усилия частных предпринимателей и государственную волю, чтобы создать лучший туристический сервис в России. Мы не просто пишем код — мы строим будущее Крыма.`,
   },
   en: {
@@ -2256,7 +2256,7 @@ export default function App() {
     const stats = calculateComplexRoute();
     
     doc.setFontSize(22);
-    doc.text("НавиКрым - Маршрутный лист", 20, 20);
+    doc.text("Навигатор Крым - Маршрутный лист", 20, 20);
     
     doc.setFontSize(14);
     doc.text(`Дата: ${new Date().toLocaleDateString()}`, 20, 30);
@@ -2276,7 +2276,7 @@ export default function App() {
     doc.setTextColor(0, 128, 0);
     doc.text("СТАТУС: ОПЛАЧЕНО ЧЕРЕЗ БЕЗОПАСНУЮ СДЕЛКУ", 20, 90);
     doc.setTextColor(0, 0, 0);
-    doc.text(`Эскроу-агент: ООО "НавиКрым" (СЭЗ Крым)`, 20, 95);
+    doc.text(`Эскроу-агент: ООО "Навигатор Крым" (СЭЗ Крым)`, 20, 95);
     doc.text("Средства удерживаются на номинальном счете до подтверждения.", 20, 100);
 
     doc.setFontSize(14);
@@ -2644,7 +2644,7 @@ export default function App() {
               
               <div className="p-8 bg-black text-white flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="text-center md:text-left">
-                  <div className="text-xl font-serif italic mb-1">НавиКрым — это точка сборки.</div>
+                  <div className="text-xl font-serif italic mb-1">Навигатор Крым — это точка сборки.</div>
                   <div className="text-[8px] font-bold uppercase tracking-widest opacity-40">Мы строим будущее Крыма сегодня.</div>
                 </div>
                 <button 
@@ -4421,7 +4421,7 @@ export default function App() {
                 </h1>
                 
                 <p className="text-xl md:text-3xl font-light max-w-3xl mx-auto leading-tight opacity-80 mb-12">
-                  НавиКрым — это интерактивная гонка по интересам, где каждое путешествие открывает новые грани полуострова и самого себя.
+                  Навигатор Крым — это интерактивная гонка по интересам, где каждое путешествие открывает новые грани полуострова и самого себя.
                 </p>
 
                 <div className="flex flex-wrap justify-center gap-6">
@@ -4552,7 +4552,7 @@ export default function App() {
                   <h3 className="text-[10px] uppercase tracking-[0.5em] font-bold opacity-40 mb-6">Коллективный разум</h3>
                   <h2 className="text-7xl font-serif mb-8">Синергия <span className="italic">сообщества</span></h2>
                   <p className="text-2xl font-light opacity-60 max-w-3xl mx-auto">
-                    НавиКрым — это не просто приложение, это живое комьюнити, где каждый участник помогает другому "открыть" Крым.
+                    Навигатор Крым — это не просто приложение, это живое комьюнити, где каждый участник помогает другому "открыть" Крым.
                   </p>
                 </div>
 
@@ -4667,7 +4667,7 @@ export default function App() {
               >
                 Вернуться к приложению
               </button>
-              <p className="mt-12 text-[10px] uppercase tracking-widest opacity-30">© 2026 НавиКрым — Проект для грантовой поддержки</p>
+              <p className="mt-12 text-[10px] uppercase tracking-widest opacity-30">© 2026 Навигатор Крым — Проект для грантовой поддержки</p>
             </section>
           </motion.div>
         )}
@@ -4693,10 +4693,10 @@ export default function App() {
             <div className="flex items-center gap-2 cursor-pointer group" onClick={openRegionsCatalog}>
               <img
                 src="/android-chrome-192x192.png"
-                alt="Герб НавиКрым"
+                alt="Герб Навигатор Крым"
                 className="w-7 h-7 object-contain drop-shadow-md group-hover:scale-110 transition-transform"
               />
-              <span className="font-bold tracking-tight text-[1.9rem] leading-none logo-gradient whitespace-nowrap">НавиКрым</span>
+              <span className="font-bold tracking-tight text-[1.5rem] md:text-[1.8rem] leading-none logo-gradient whitespace-nowrap">Навигатор Крым</span>
             </div>
           </div>
           <div className="nav-menu flex items-center justify-center gap-1 2xl:gap-2.5 font-semibold text-black/88 flex-wrap flex-1 min-w-0">
@@ -5140,7 +5140,7 @@ export default function App() {
                       <div className="flex items-center justify-between gap-4 mb-6">
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-accent-purple/60 mb-2">Голосовой помощник</p>
-                          <h2 className="text-3xl md:text-4xl font-serif leading-none">Алиса для НавиКрым</h2>
+                          <h2 className="text-3xl md:text-4xl font-serif leading-none">Алиса для Навигатор Крым</h2>
                         </div>
                         <div className="hidden md:flex w-14 h-14 rounded-2xl bg-accent-purple text-white items-center justify-center shadow-lg shadow-accent-purple/20">
                           <Sparkles size={26} />
@@ -5192,7 +5192,7 @@ export default function App() {
                     <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.9fr)] gap-6">
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                          <h3 className="text-xl font-serif">В базе НавиКрым</h3>
+                          <h3 className="text-xl font-serif">В базе Навигатор Крым</h3>
                           <div className="text-[10px] font-bold uppercase tracking-widest opacity-40">
                             Найдено: {assistantMatchedObjects.length}
                           </div>

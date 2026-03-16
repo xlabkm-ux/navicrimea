@@ -433,103 +433,140 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={embedded ? undefined : { opacity: 0, scale: 0.9, y: 20 }}
-            className={panelClassName}
+            className={`${panelClassName} flex flex-col`}
+            style={embedded ? { minHeight: '480px' } : undefined}
           >
-            <div className="p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-accent-purple rounded-full animate-pulse" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">{title}</span>
+            {/* Header / Top Bar */}
+            <div className="px-6 pt-5 pb-2 flex items-center justify-between z-10">
+              {embedded ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-accent-purple/5 rounded-full border border-accent-purple/10">
+                  <div className={`w-2 h-2 rounded-full ${isListening ? 'bg-red-500 animate-pulse' : 'bg-accent-purple'}`} />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-accent-purple mix-blend-multiply">
+                    {isListening ? 'Слушаю вас...' : 'Ассистент готов'}
+                  </span>
                 </div>
-                {!embedded && (
-                  <button onClick={() => setIsOpen(false)} className="opacity-20 hover:opacity-100 transition-opacity">
+              ) : (
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${isListening ? 'bg-red-500 animate-pulse' : 'bg-accent-purple'}`} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest opacity-40">{title}</span>
+                  </div>
+                  <button onClick={() => setIsOpen(false)} className="opacity-40 hover:opacity-100 transition-opacity p-2 hover:bg-black/5 rounded-full">
                     <X size={16} />
                   </button>
-                )}
-              </div>
-
-              <div ref={messagesContainerRef} className="min-h-[220px] max-h-[420px] overflow-y-auto custom-scrollbar pr-1">
-                {isProcessing ? (
-                  <div className="flex flex-col items-center gap-3 py-4">
-                    <Loader2 className="animate-spin text-accent-purple" size={32} />
-                    <p className="text-xs font-medium opacity-40">Анализирую ваши мысли...</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {messages.map((message) => (
-                      <motion.div
-                        key={message.id}
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div
-                          className={`max-w-[85%] rounded-[24px] px-4 py-3 text-sm leading-relaxed shadow-sm ${
-                            message.role === 'user'
-                              ? 'bg-accent-purple text-white'
-                              : 'bg-white border border-accent-purple/10 text-gray-800'
-                          }`}
-                        >
-                          {message.text}
-                        </div>
-                      </motion.div>
-                    ))}
-                    {!isSpeechSupported && (
-                      <div className="text-center space-y-2 pt-2">
-                        <p className="text-sm opacity-60">Для голосового режима нужен браузер с доступом к микрофону и Web Audio API.</p>
-                      </div>
-                    )}
-                    {lastResponse && (
-                      <div className="text-center pt-1">
-                        <p className="text-[11px] opacity-55">{lastResponse}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-[10px] uppercase tracking-widest opacity-30 font-bold">
-                  Например: "Хочу тихий отель в горах с видом на море"
                 </div>
+              )}
+
+              {/* Volume / Status Toggle next to title when embedded */}
+              {embedded && (
                 <button 
                   onClick={() => {
-                    if (!isMuted) {
-                      stopAudioPlayback();
-                    }
+                    if (!isMuted) stopAudioPlayback();
                     const nextMuted = !isMuted;
                     setIsMuted(nextMuted);
                     setSpeechStatus(nextMuted ? 'muted' : 'idle');
                   }}
-                  className="p-2 hover:bg-accent-purple/5 rounded-full transition-colors opacity-40 hover:opacity-100 shrink-0"
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
+                    isMuted ? 'bg-black/5 text-black/40' : 'bg-accent-purple/10 text-accent-purple'
+                  }`}
+                  title={speechStatusLabel}
                 >
-                  {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                  {isMuted ? <VolumeX size={12} /> : <Volume2 size={12} />}
+                  <span className="hidden sm:inline-block">Голос</span>
                 </button>
-              </div>
+              )}
+            </div>
 
-              <div className="text-[10px] font-bold uppercase tracking-widest opacity-50">
-                {speechStatusLabel}
-              </div>
-
-              {transcript && isListening && (
-                <div className="p-3 bg-peach-bg rounded-2xl border border-accent-purple/5">
-                  <p className="text-xs text-accent-purple opacity-60 italic">"{transcript}{isListening ? '...' : ''}"</p>
+            {/* Chat Messages */}
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto custom-scrollbar px-6 mb-24 relative z-0">
+              {isProcessing ? (
+                <div className="flex flex-col items-center gap-3 py-10 opacity-70">
+                  <Loader2 className="animate-spin text-accent-purple" size={32} />
+                  <p className="text-xs font-medium uppercase tracking-widest opacity-40">Анализирую...</p>
+                </div>
+              ) : (
+                <div className="space-y-4 py-4">
+                  {messages.map((message) => (
+                    <motion.div
+                      key={message.id}
+                      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-[90%] md:max-w-[85%] rounded-[24px] px-5 py-3.5 text-sm leading-relaxed shadow-sm ${
+                          message.role === 'user'
+                            ? 'bg-accent-purple text-white shadow-accent-purple/20'
+                            : 'bg-white border border-black/5 text-gray-800'
+                        }`}
+                      >
+                        {message.text}
+                      </div>
+                    </motion.div>
+                  ))}
+                  {!isSpeechSupported && (
+                    <div className="text-center space-y-2 pt-4">
+                      <p className="text-xs uppercase tracking-widest opacity-40 font-bold">Браузер не поддерживает микрофон</p>
+                    </div>
+                  )}
+                  {lastResponse && (
+                    <div className="text-center pt-2">
+                      <p className="text-[10px] uppercase font-bold tracking-widest text-red-500 opacity-80">{lastResponse}</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
-            <div className="p-4 bg-peach-bg/50 border-t border-accent-purple/10 flex justify-center">
-              <button
-                onClick={toggleListening}
-                disabled={!isSpeechSupported || isProcessing}
-                className={`w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed ${
-                  isListening 
-                    ? 'bg-red-500 text-white animate-pulse scale-110 shadow-red-200' 
-                    : 'bg-accent-purple text-white hover:scale-105 shadow-accent-purple/20'
-                }`}
-              >
-                {isListening ? <X size={24} /> : <Mic size={24} />}
-              </button>
+            {/* Bottom Controls UI */}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent pt-12 pb-6 px-6 flex flex-col items-center pointer-events-none">
+              
+              {transcript && isListening && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="absolute -top-6 bg-white/90 backdrop-blur-md shadow-sm rounded-full px-5 py-2.5 border border-accent-purple/10 text-center max-w-[85%] truncate z-20 pointer-events-auto"
+                >
+                  <p className="text-xs font-medium text-accent-purple italic">"{transcript}..."</p>
+                </motion.div>
+              )}
+
+              {/* Central Floating Mic Button */}
+              <div className="relative z-10 -mt-8 mb-4 pointer-events-auto">
+                <button
+                  onClick={toggleListening}
+                  disabled={!isSpeechSupported || isProcessing}
+                  className={`w-16 h-16 rounded-full flex items-center justify-center transition-all outline-none ${
+                    isListening 
+                      ? 'bg-red-500 text-white animate-pulse scale-110 shadow-[0_0_30px_rgba(239,68,68,0.4)]' 
+                      : 'bg-accent-purple text-white hover:scale-105 shadow-xl shadow-accent-purple/25 ring-4 ring-white'
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  {isListening ? <span className="w-5 h-5 bg-white rounded-sm animate-pulse" /> : <Mic size={24} />}
+                </button>
+              </div>
+              
+              <div className="text-center w-full pointer-events-auto pb-2">
+                <p className="text-[9px] sm:text-[10px] uppercase tracking-widest opacity-30 font-bold truncate">
+                  Например: "Хочу тихий отель в горах с видом на море"
+                </p>
+              </div>
+
+              {/* Volume toggle for non-embedded modal mode */}
+              {!embedded && (
+                <button 
+                  onClick={() => {
+                    if (!isMuted) stopAudioPlayback();
+                    const nextMuted = !isMuted;
+                    setIsMuted(nextMuted);
+                    setSpeechStatus(nextMuted ? 'muted' : 'idle');
+                  }}
+                  className="absolute bottom-6 right-6 p-2 rounded-full text-black/40 hover:text-accent-purple hover:bg-accent-purple/10 transition-colors pointer-events-auto"
+                  title={speechStatusLabel}
+                >
+                  {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                </button>
+              )}
             </div>
           </motion.div>
         )}
