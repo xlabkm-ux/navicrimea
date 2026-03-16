@@ -59,8 +59,11 @@ export function SettingsPanel() {
 
       <div className="grid gap-6">
         {[
+          { key: 'YANDEX_API_KEY', label: 'Yandex Cloud API Key (SpeechKit / GPT)', type: 'password' },
           { key: 'YANDEX_GPT_KEY', label: 'Yandex GPT API Key', type: 'password' },
           { key: 'YANDEX_FOLDER_ID', label: 'Yandex Cloud Folder ID', type: 'text' },
+          { key: 'YANDEX_GPT_MODEL', label: 'Yandex GPT Model', type: 'text' },
+          { key: 'YANDEX_TTS_VOICE', label: 'Yandex TTS Voice', type: 'text' },
           { key: 'YANDEX_SEARCH_API_KEY', label: 'Yandex Search API Key (Photos)', type: 'password' },
           { key: 'VITE_YANDEX_MAPS_API_KEY', label: 'Yandex Maps API Key', type: 'password' },
           { key: 'AI_MODE', label: 'AI Mode (local / yandex)', type: 'text' },

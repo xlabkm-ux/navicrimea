@@ -1,0 +1,21 @@
+<svg width="64" height="64" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="shieldFill" x1="120" y1="72" x2="392" y2="460" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C70B3B"/>
+      <stop offset="0.52" stop-color="#A60531"/>
+      <stop offset="1" stop-color="#76011F"/>
+    </linearGradient>
+    <linearGradient id="eagleFill" x1="179" y1="150" x2="357" y2="370" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F8FBFD"/>
+      <stop offset="1" stop-color="#D5DCE2"/>
+    </linearGradient>
+  </defs>
+  <path d="M256 44L408 114V283C408 370 353 437 256 488C159 437 104 370 104 283V114L256 44Z" fill="url(#shieldFill)"/>
+  <path d="M256 68L389 128V281C389 355 343 415 256 463C169 415 123 355 123 281V128L256 68Z" stroke="#D62A56" stroke-width="14"/>
+  <path d="M256 44L408 114V283C408 370 353 437 256 488V44Z" fill="#520014" fill-opacity="0.18"/>
+  <path d="M180 180C195 150 222 136 262 137C297 137 327 146 351 164C334 165 317 172 302 184C287 195 277 209 272 226C260 209 242 196 218 188C206 184 193 182 180 180Z" fill="url(#eagleFill)" stroke="#9199A3" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M165 210C174 188 190 173 214 166C237 159 262 161 288 171C267 180 252 192 242 208C232 224 228 243 231 266C220 251 208 239 194 231C185 226 175 222 165 220V210Z" fill="url(#eagleFill)" stroke="#9199A3" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M169 248C192 247 213 253 231 268C248 282 257 302 258 328C246 318 231 313 213 313C202 313 188 316 173 322C180 295 191 270 207 249L169 248Z" fill="url(#eagleFill)" stroke="#9199A3" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M254 169C277 163 299 164 320 171C342 178 358 190 369 207C352 211 338 222 325 239C314 254 308 271 306 289C297 271 283 255 263 241C250 231 237 224 223 219C231 200 241 184 254 169Z" fill="url(#eagleFill)" stroke="#9199A3" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M330 163C349 167 363 176 372 190C356 193 344 201 336 214C332 196 323 181 309 170L330 163Z" fill="#9199A3"/>
+</svg>

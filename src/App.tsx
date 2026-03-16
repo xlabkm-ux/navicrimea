@@ -4539,9 +4539,9 @@ export default function App() {
           <div className="flex items-center gap-2 md:gap-4 shrink-0">
             <div className="flex items-center gap-2 cursor-pointer group" onClick={() => { setShowHero(true); setSelectedRegion(null); }}>
               <img
-                src="/navicrimea-emblem.png"
+                src="/android-chrome-192x192.png"
                 alt="Герб НавиКрым"
-                className="w-8 h-8 rounded-lg object-cover shadow-lg shadow-accent-purple/15 group-hover:scale-110 transition-transform"
+                className="w-8 h-8 object-contain drop-shadow-md group-hover:scale-110 transition-transform"
               />
               <span className="font-bold tracking-tight text-lg xl:text-[1.35rem] logo-gradient whitespace-nowrap">НавиКрым</span>
             </div>

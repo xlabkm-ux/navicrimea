@@ -27,141 +27,306 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
   const [lastResponse, setLastResponse] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeechSupported, setIsSpeechSupported] = useState(true);
+  const [recordingMode, setRecordingMode] = useState<'ogg' | 'lpcm' | 'unsupported'>('unsupported');
   
-  const recognitionRef = useRef<any>(null);
-  const synthRef = useRef<SpeechSynthesis | null>(null);
-  const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
   const transcriptRef = useRef('');
   const shouldProcessRef = useRef(false);
-
-  const selectPreferredVoice = () => {
-    if (!window.speechSynthesis) return null;
-
-    const voices = window.speechSynthesis.getVoices();
-    if (!voices.length) return null;
-
-    const preferredNames = [
-      'Milena',
-      'Alena',
-      'Katya',
-      'Yana',
-      'Alice',
-      'Мария',
-      'Алиса',
-      'Milena Premium',
-      'Google русский',
-      'Microsoft Irina',
-      'Microsoft Svetlana',
-      'Microsoft Ekaterina',
-    ];
-
-    const russianVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith('ru'));
-    const femaleCandidate =
-      russianVoices.find((voice) =>
-        preferredNames.some((name) => voice.name.toLowerCase().includes(name.toLowerCase())),
-      ) ??
-      russianVoices.find((voice) =>
-        /(female|woman|zina|irina|svetlana|maria|milena|alena|katya|yana|anna|victoria)/i.test(voice.name),
-      ) ??
-      russianVoices[0] ??
-      voices.find((voice) => voice.lang.toLowerCase().startsWith('en')) ??
-      voices[0];
-
-    return femaleCandidate ?? null;
-  };
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recordingTimeoutRef = useRef<number | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
+  const pcmChunksRef = useRef<Float32Array[]>([]);
+  const pcmSampleRateRef = useRef<number>(48000);
 
   useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setIsSpeechSupported(false);
-    } else {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = 'ru-RU';
+    const supportsOggRecording =
+      typeof window !== 'undefined' &&
+      typeof navigator !== 'undefined' &&
+      !!navigator.mediaDevices?.getUserMedia &&
+      typeof MediaRecorder !== 'undefined' &&
+      MediaRecorder.isTypeSupported('audio/ogg;codecs=opus');
+    const supportsLpcmRecording =
+      typeof window !== 'undefined' &&
+      typeof navigator !== 'undefined' &&
+      !!navigator.mediaDevices?.getUserMedia &&
+      typeof AudioContext !== 'undefined';
 
-      recognition.onstart = () => {
-        setIsListening(true);
-      };
-
-      recognition.onresult = (event: any) => {
-        let nextTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i += 1) {
-          nextTranscript += event.results[i][0].transcript;
-        }
-
-        transcriptRef.current = nextTranscript.trim();
-        setTranscript(transcriptRef.current);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-        if (shouldProcessRef.current && transcriptRef.current) {
-          void handleProcessInput(transcriptRef.current);
-        }
-        shouldProcessRef.current = false;
-      };
-
-      recognition.onerror = (event: any) => {
-        console.error("Speech recognition error", event.error);
-        shouldProcessRef.current = false;
-        setIsListening(false);
-        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-          setLastResponse('Браузер заблокировал доступ к микрофону. Разрешите доступ и повторите.');
-        } else if (event.error === 'no-speech') {
-          setLastResponse('Речь не распознана. Повторите запрос чуть громче или ближе к микрофону.');
-        } else {
-          setLastResponse('Не удалось распознать голосовой запрос. Попробуйте еще раз.');
-        }
-      };
-
-      recognitionRef.current = recognition;
-    }
-
-    synthRef.current = window.speechSynthesis;
-    voiceRef.current = selectPreferredVoice();
-    if (window.speechSynthesis) {
-      window.speechSynthesis.onvoiceschanged = () => {
-        voiceRef.current = selectPreferredVoice();
-      };
-    }
+    const nextMode = supportsOggRecording ? 'ogg' : supportsLpcmRecording ? 'lpcm' : 'unsupported';
+    setRecordingMode(nextMode);
+    setIsSpeechSupported(nextMode !== 'unsupported');
 
     return () => {
-      if (recognitionRef.current) recognitionRef.current.stop();
-      if (synthRef.current) synthRef.current.cancel();
-      if (window.speechSynthesis) {
-        window.speechSynthesis.onvoiceschanged = null;
+      if (recordingTimeoutRef.current) {
+        window.clearTimeout(recordingTimeoutRef.current);
+      }
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      processorNodeRef.current?.disconnect();
+      sourceNodeRef.current?.disconnect();
+      void audioContextRef.current?.close();
+      audioRef.current?.pause();
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
       }
     };
   }, []);
 
-  const toggleListening = () => {
+  const stopAudioPlayback = () => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+  };
+
+  const stopRecordingStream = () => {
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+  };
+
+  const cleanupPcmRecorder = async () => {
+    processorNodeRef.current?.disconnect();
+    processorNodeRef.current = null;
+    sourceNodeRef.current?.disconnect();
+    sourceNodeRef.current = null;
+    if (audioContextRef.current) {
+      await audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+  };
+
+  const convertPcmChunksToBlob = () => {
+    const totalLength = pcmChunksRef.current.reduce((acc, chunk) => acc + chunk.length, 0);
+    const pcm16 = new Int16Array(totalLength);
+    let offset = 0;
+
+    for (const chunk of pcmChunksRef.current) {
+      for (let i = 0; i < chunk.length; i += 1) {
+        const sample = Math.max(-1, Math.min(1, chunk[i]));
+        pcm16[offset] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+        offset += 1;
+      }
+    }
+
+    return new Blob([pcm16.buffer], { type: 'application/octet-stream' });
+  };
+
+  const startListening = async () => {
     if (!isSpeechSupported) {
-      setLastResponse('Голосовой ввод не поддерживается в этом браузере.');
+      setLastResponse('Для голосового ввода нужен браузер с поддержкой записи OGG/Opus.');
       return;
     }
 
-    if (isListening) {
-      shouldProcessRef.current = false;
-      recognitionRef.current?.stop();
-    } else {
+    try {
+      stopAudioPlayback();
       transcriptRef.current = '';
       setTranscript('');
       setLastResponse(null);
       shouldProcessRef.current = true;
-      recognitionRef.current?.start();
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      mediaStreamRef.current = stream;
+      if (recordingMode === 'ogg') {
+        const chunks: Blob[] = [];
+        const recorder = new MediaRecorder(stream, {
+          mimeType: 'audio/ogg;codecs=opus',
+          audioBitsPerSecond: 32000,
+        });
+
+        recorder.onstart = () => {
+          setIsListening(true);
+        };
+
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            chunks.push(event.data);
+          }
+        };
+
+        recorder.onerror = (event: any) => {
+          console.error('SpeechKit recorder error', event);
+          shouldProcessRef.current = false;
+          setIsListening(false);
+          setIsProcessing(false);
+          stopRecordingStream();
+          setLastResponse('Не удалось записать голосовой запрос. Проверьте доступ к микрофону.');
+        };
+
+        recorder.onstop = async () => {
+          setIsListening(false);
+          if (recordingTimeoutRef.current) {
+            window.clearTimeout(recordingTimeoutRef.current);
+            recordingTimeoutRef.current = null;
+          }
+
+          const audioBlob = new Blob(chunks, { type: 'audio/ogg;codecs=opus' });
+          stopRecordingStream();
+
+          if (!shouldProcessRef.current) {
+            return;
+          }
+
+          setIsProcessing(true);
+          try {
+            const text = await externalAI.transcribeAudio(audioBlob, { format: 'oggopus' });
+            transcriptRef.current = text;
+            setTranscript(text);
+
+            if (!text) {
+              setLastResponse('Не удалось распознать речь. Скажите фразу короче и повторите.');
+              return;
+            }
+
+            await handleProcessInput(text);
+          } catch (error) {
+            console.error('SpeechKit STT error', error);
+            setLastResponse('Не удалось распознать голосовой запрос через SpeechKit.');
+          } finally {
+            shouldProcessRef.current = false;
+            setIsProcessing(false);
+          }
+        };
+
+        mediaRecorderRef.current = recorder;
+        recorder.start();
+        recordingTimeoutRef.current = window.setTimeout(() => {
+          if (mediaRecorderRef.current?.state === 'recording') {
+            mediaRecorderRef.current.stop();
+          }
+        }, 10000);
+        return;
+      }
+
+      if (recordingMode === 'lpcm') {
+        pcmChunksRef.current = [];
+        const audioContext = new AudioContext();
+        audioContextRef.current = audioContext;
+        pcmSampleRateRef.current = audioContext.sampleRate;
+        const sourceNode = audioContext.createMediaStreamSource(stream);
+        sourceNodeRef.current = sourceNode;
+        const processorNode = audioContext.createScriptProcessor(4096, 1, 1);
+        processorNodeRef.current = processorNode;
+
+        processorNode.onaudioprocess = (event) => {
+          const input = event.inputBuffer.getChannelData(0);
+          pcmChunksRef.current.push(new Float32Array(input));
+        };
+
+        sourceNode.connect(processorNode);
+        processorNode.connect(audioContext.destination);
+        setIsListening(true);
+        recordingTimeoutRef.current = window.setTimeout(async () => {
+          setIsListening(false);
+          if (recordingTimeoutRef.current) {
+            window.clearTimeout(recordingTimeoutRef.current);
+            recordingTimeoutRef.current = null;
+          }
+          stopRecordingStream();
+          await cleanupPcmRecorder();
+
+          if (!shouldProcessRef.current) {
+            return;
+          }
+
+          setIsProcessing(true);
+          try {
+            const audioBlob = convertPcmChunksToBlob();
+            const text = await externalAI.transcribeAudio(audioBlob, {
+              format: 'lpcm',
+              sampleRateHertz: pcmSampleRateRef.current,
+            });
+            transcriptRef.current = text;
+            setTranscript(text);
+
+            if (!text) {
+              setLastResponse('Не удалось распознать речь. Скажите фразу короче и повторите.');
+              return;
+            }
+
+            await handleProcessInput(text);
+          } catch (error) {
+            console.error('SpeechKit LPCM STT error', error);
+            setLastResponse('Не удалось распознать голосовой запрос через SpeechKit.');
+          } finally {
+            shouldProcessRef.current = false;
+            setIsProcessing(false);
+          }
+        }, 9000);
+      }
+    } catch (error) {
+      console.error('Microphone access error', error);
+      shouldProcessRef.current = false;
+      setLastResponse('Браузер заблокировал доступ к микрофону. Разрешите доступ и повторите.');
+    }
+  };
+
+  const toggleListening = () => {
+    if (!isSpeechSupported) {
+      setLastResponse('Голосовой ввод SpeechKit недоступен в этом браузере.');
+      return;
+    }
+
+    if (isListening) {
+      if (recordingMode === 'ogg') {
+        mediaRecorderRef.current?.stop();
+      } else if (recordingMode === 'lpcm') {
+        setIsListening(false);
+        if (recordingTimeoutRef.current) {
+          window.clearTimeout(recordingTimeoutRef.current);
+          recordingTimeoutRef.current = null;
+        }
+        stopRecordingStream();
+        void cleanupPcmRecorder().then(async () => {
+          if (!shouldProcessRef.current) return;
+          setIsProcessing(true);
+          try {
+            const audioBlob = convertPcmChunksToBlob();
+            const text = await externalAI.transcribeAudio(audioBlob, {
+              format: 'lpcm',
+              sampleRateHertz: pcmSampleRateRef.current,
+            });
+            transcriptRef.current = text;
+            setTranscript(text);
+            if (!text) {
+              setLastResponse('Не удалось распознать речь. Скажите фразу короче и повторите.');
+              return;
+            }
+            await handleProcessInput(text);
+          } catch (error) {
+            console.error('SpeechKit LPCM STT error', error);
+            setLastResponse('Не удалось распознать голосовой запрос через SpeechKit.');
+          } finally {
+            shouldProcessRef.current = false;
+            setIsProcessing(false);
+          }
+        });
+      }
+    } else {
+      void startListening();
     }
   };
 
   const handleProcessInput = async (text: string) => {
-    setIsProcessing(true);
     try {
       const response: AIResponse = await externalAI.processVoiceInput(text, currentContext);
       setLastResponse(response.text);
       
       if (!isMuted && response.text) {
-        speak(response.text);
+        await speak(response.text);
       }
 
       if (response.actions) {
@@ -169,26 +334,25 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
       }
     } catch (error) {
       setLastResponse("Произошла ошибка при обработке вашего запроса.");
-    } finally {
-      setIsProcessing(false);
     }
   };
 
-  const speak = (text: string) => {
-    if (!synthRef.current) return;
-    synthRef.current.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    const preferredVoice = voiceRef.current ?? selectPreferredVoice();
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
-      utterance.lang = preferredVoice.lang;
-    } else {
-      utterance.lang = 'ru-RU';
+  const speak = async (text: string) => {
+    try {
+      stopAudioPlayback();
+      const audioUrl = await externalAI.synthesizeSpeech(text);
+      if (!audioUrl) return;
+      audioUrlRef.current = audioUrl;
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      audio.onended = () => {
+        stopAudioPlayback();
+      };
+      await audio.play();
+    } catch (error) {
+      console.error('SpeechKit TTS error', error);
+      setLastResponse('Ответ получен, но озвучить его через SpeechKit не удалось.');
     }
-    utterance.pitch = 1.08;
-    utterance.rate = 0.95;
-    utterance.volume = 1;
-    synthRef.current.speak(utterance);
   };
 
   return (
@@ -229,7 +393,12 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
                     </p>
                     <div className="flex justify-end">
                       <button 
-                        onClick={() => setIsMuted(!isMuted)}
+                        onClick={() => {
+                          if (!isMuted) {
+                            stopAudioPlayback();
+                          }
+                          setIsMuted(!isMuted);
+                        }}
                         className="p-2 hover:bg-accent-purple/5 rounded-full transition-colors opacity-40 hover:opacity-100"
                       >
                         {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
@@ -240,17 +409,17 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
                   <div className="text-center space-y-2">
                     <p className="text-sm opacity-60">
                       {isSpeechSupported
-                        ? 'Нажмите на микрофон и расскажите о ваших пожеланиях к отдыху.'
-                        : 'Голосовой ввод недоступен в этом браузере.'}
+                        ? `Нажмите на микрофон и скажите короткий запрос. Голос обрабатывается через SpeechKit и YandexGPT${recordingMode === 'lpcm' ? ' в режиме совместимости' : ''}.`
+                        : 'Для голосового режима нужен браузер с доступом к микрофону и Web Audio API.'}
                     </p>
                     <p className="text-[10px] uppercase tracking-widest opacity-30 font-bold">Например: "Хочу тихий отель в горах с видом на море"</p>
                   </div>
                 )}
               </div>
 
-              {transcript && isListening && (
+              {transcript && (
                 <div className="p-3 bg-peach-bg rounded-2xl border border-accent-purple/5">
-                  <p className="text-xs text-accent-purple opacity-60 italic">"{transcript}..."</p>
+                  <p className="text-xs text-accent-purple opacity-60 italic">"{transcript}{isListening ? '...' : ''}"</p>
                 </div>
               )}
             </div>

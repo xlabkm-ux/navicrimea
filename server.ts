@@ -112,6 +112,13 @@ const buildLocalRoute = (prompt: string) => ({
   }
 });
 
+const getYandexApiKey = () => getConfig('YANDEX_API_KEY') || getConfig('YANDEX_GPT_KEY');
+const getYandexFolderId = () => getConfig('YANDEX_FOLDER_ID');
+const getYandexGptModel = () => getConfig('YANDEX_GPT_MODEL') || 'yandexgpt-lite';
+const getYandexTtsVoice = () => getConfig('YANDEX_TTS_VOICE') || 'alena';
+const assistantInstruction =
+  'Ты — голосовой помощник туристической платформы НавиКрым. Говори естественно, дружелюбно и короткими фразами на русском. Учитывай контекст поездки по Крыму. Не выдумывай факты, если данных нет. Если пользователь просит маршрут, проживание или идеи отдыха, отвечай практично и по делу.';
+
 async function startServer() {
   const app = express();
   app.use(express.json());
@@ -162,8 +169,9 @@ async function startServer() {
   app.post('/api/v1/ai/chat', async (req, res) => {
     const { message, context } = req.body;
     const AI_MODE = getConfig('AI_MODE') || 'yandex';
-    const YANDEX_API_KEY = getConfig('YANDEX_GPT_KEY');
-    const YANDEX_FOLDER_ID = getConfig('YANDEX_FOLDER_ID');
+    const YANDEX_API_KEY = getYandexApiKey();
+    const YANDEX_FOLDER_ID = getYandexFolderId();
+    const YANDEX_GPT_MODEL = getYandexGptModel();
 
     if (AI_MODE === 'local') {
       return res.json({ text: `[Локальный ИИ] ${message}` });
@@ -182,11 +190,11 @@ async function startServer() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          modelUri: `gpt://${YANDEX_FOLDER_ID}/yandexgpt-lite`,
-          completionOptions: { stream: false, temperature: 0.5, maxTokens: '2000' },
+          modelUri: `gpt://${YANDEX_FOLDER_ID}/${YANDEX_GPT_MODEL}`,
+          completionOptions: { stream: false, temperature: 0.35, maxTokens: '2000' },
           messages: [
-            { role: 'system', text: context?.instruction || "Ты — интеллектуальный помощник туристической платформы НавиКрым. Отвечай кратко, полезно и по-русски." },
-            { role: 'user', text: `Контекст: ${JSON.stringify(context)}. Сообщение пользователя: ${message}` }
+            { role: 'system', text: context?.instruction || assistantInstruction },
+            { role: 'user', text: `Контекст приложения: ${JSON.stringify(context)}.\nСообщение пользователя: ${message}` }
           ]
         })
       });
@@ -208,6 +216,107 @@ async function startServer() {
     }
   });
 
+  app.post('/api/v1/ai/transcribe', express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
+    const AI_MODE = getConfig('AI_MODE') || 'yandex';
+    const YANDEX_API_KEY = getYandexApiKey();
+    const YANDEX_FOLDER_ID = getYandexFolderId();
+
+    if (AI_MODE === 'local') {
+      return res.json({ text: '' });
+    }
+
+    if (!YANDEX_API_KEY || !YANDEX_FOLDER_ID) {
+      return res.status(400).json({ text: 'SpeechKit не настроен. Укажите API ключ и Folder ID в настройках.' });
+    }
+
+    if (!req.body || !(req.body as Buffer).length) {
+      return res.status(400).json({ text: 'Пустой аудиофайл.' });
+    }
+
+    try {
+      const lang = encodeURIComponent(String(req.query.lang || 'ru-RU'));
+      const format = String(req.query.format || 'oggopus').toLowerCase();
+      const sampleRateHertz = String(req.query.sampleRateHertz || '48000');
+      const contentType = format === 'lpcm' ? 'application/octet-stream' : 'audio/ogg';
+      const response = await fetch(
+        `https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?topic=general&lang=${lang}&format=${encodeURIComponent(format)}${format === 'lpcm' ? `&sampleRateHertz=${encodeURIComponent(sampleRateHertz)}` : ''}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Api-Key ${YANDEX_API_KEY}`,
+            'x-folder-id': YANDEX_FOLDER_ID,
+            'Content-Type': contentType,
+          },
+          body: req.body as Buffer,
+        },
+      );
+
+      const data: any = await response.json();
+      if (!response.ok) {
+        const errorMessage = data?.error_message || data?.message || `SpeechKit STT failed with status ${response.status}`;
+        return res.status(response.status).json({ text: errorMessage });
+      }
+
+      res.json({ text: data?.result || '' });
+    } catch (err) {
+      console.error('SpeechKit STT Error:', err);
+      res.status(500).json({ text: 'Ошибка при распознавании речи через SpeechKit.' });
+    }
+  });
+
+  app.post('/api/v1/ai/speak', async (req, res) => {
+    const AI_MODE = getConfig('AI_MODE') || 'yandex';
+    const YANDEX_API_KEY = getYandexApiKey();
+    const YANDEX_FOLDER_ID = getYandexFolderId();
+    const YANDEX_TTS_VOICE = getYandexTtsVoice();
+    const text = String(req.body?.text || '').trim();
+
+    if (AI_MODE === 'local') {
+      return res.status(204).end();
+    }
+
+    if (!YANDEX_API_KEY || !YANDEX_FOLDER_ID) {
+      return res.status(400).json({ text: 'SpeechKit TTS не настроен. Укажите API ключ и Folder ID в настройках.' });
+    }
+
+    if (!text) {
+      return res.status(400).json({ text: 'Нет текста для синтеза.' });
+    }
+
+    try {
+      const params = new URLSearchParams({
+        text,
+        lang: 'ru-RU',
+        voice: YANDEX_TTS_VOICE,
+        folderId: YANDEX_FOLDER_ID,
+        format: 'oggopus',
+        sampleRateHertz: '48000',
+      });
+
+      const response = await fetch('https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize', {
+        method: 'POST',
+        headers: {
+          Authorization: `Api-Key ${YANDEX_API_KEY}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return res.status(response.status).json({ text: errorText || 'SpeechKit TTS request failed.' });
+      }
+
+      const audioBuffer = Buffer.from(await response.arrayBuffer());
+      res.setHeader('Content-Type', response.headers.get('content-type') || 'audio/ogg');
+      res.setHeader('Cache-Control', 'no-store');
+      res.send(audioBuffer);
+    } catch (err) {
+      console.error('SpeechKit TTS Error:', err);
+      res.status(500).json({ text: 'Ошибка при синтезе речи через SpeechKit.' });
+    }
+  });
+
   app.post('/api/v1/ai/route', async (req, res) => {
     const prompt = req.body?.prompt || 'Маршрут по Крыму';
     res.json(buildLocalRoute(prompt));
@@ -223,7 +332,11 @@ async function startServer() {
   });
 
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
+    const vite = await createViteServer({
+      configLoader: 'runner',
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
