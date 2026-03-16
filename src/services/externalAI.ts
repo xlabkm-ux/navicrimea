@@ -30,7 +30,7 @@ class ExternalAIService {
 
   async transcribeAudio(
     audioBlob: Blob,
-    options: { lang?: string; format?: 'oggopus' | 'lpcm'; sampleRateHertz?: number } = {},
+    options: { lang?: string; format?: 'oggopus' | 'webmopus' | 'lpcm'; sampleRateHertz?: number } = {},
   ): Promise<string> {
     const lang = options.lang || 'ru-RU';
     const format = options.format || 'oggopus';
@@ -38,14 +38,21 @@ class ExternalAIService {
     const response = await fetch(`/api/v1/ai/transcribe?lang=${encodeURIComponent(lang)}&format=${encodeURIComponent(format)}${sampleRateParam}`, {
       method: 'POST',
       headers: {
-        'Content-Type': audioBlob.type || (format === 'lpcm' ? 'application/octet-stream' : 'audio/ogg'),
+        'Content-Type':
+          audioBlob.type ||
+          (format === 'lpcm' ? 'application/octet-stream' : format === 'webmopus' ? 'audio/webm' : 'audio/ogg'),
       },
       body: audioBlob,
     });
 
-    const data = await response.json();
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
     if (!response.ok) {
-      throw new Error(data?.text || 'SpeechKit STT request failed');
+      throw new Error(data?.text || `SpeechKit STT request failed (${response.status})`);
     }
 
     return String(data?.text || '').trim();

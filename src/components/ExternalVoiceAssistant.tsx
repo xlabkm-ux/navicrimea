@@ -39,7 +39,7 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
   const [lastResponse, setLastResponse] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeechSupported, setIsSpeechSupported] = useState(true);
-  const [recordingMode, setRecordingMode] = useState<'ogg' | 'lpcm' | 'unsupported'>('unsupported');
+  const [recordingMode, setRecordingMode] = useState<'webm' | 'ogg' | 'lpcm' | 'unsupported'>('unsupported');
   const [speechStatus, setSpeechStatus] = useState<'idle' | 'synthesizing' | 'playing' | 'muted' | 'error'>('idle');
   const [messages, setMessages] = useState<AssistantMessage[]>([
     {
@@ -64,6 +64,12 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    const supportsWebmRecording =
+      typeof window !== 'undefined' &&
+      typeof navigator !== 'undefined' &&
+      !!navigator.mediaDevices?.getUserMedia &&
+      typeof MediaRecorder !== 'undefined' &&
+      MediaRecorder.isTypeSupported('audio/webm;codecs=opus');
     const supportsOggRecording =
       typeof window !== 'undefined' &&
       typeof navigator !== 'undefined' &&
@@ -76,7 +82,7 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
       !!navigator.mediaDevices?.getUserMedia &&
       typeof AudioContext !== 'undefined';
 
-    const nextMode = supportsOggRecording ? 'ogg' : supportsLpcmRecording ? 'lpcm' : 'unsupported';
+    const nextMode = supportsWebmRecording ? 'webm' : supportsOggRecording ? 'ogg' : supportsLpcmRecording ? 'lpcm' : 'unsupported';
     setRecordingMode(nextMode);
     setIsSpeechSupported(nextMode !== 'unsupported');
 
@@ -147,7 +153,7 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
 
   const startListening = async () => {
     if (!isSpeechSupported) {
-      setLastResponse('Для голосового ввода нужен браузер с поддержкой записи OGG/Opus.');
+      setLastResponse('Для голосового ввода нужен браузер с поддержкой записи Opus (WebM/OGG) или Web Audio API.');
       return;
     }
 
@@ -167,10 +173,11 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
       });
 
       mediaStreamRef.current = stream;
-      if (recordingMode === 'ogg') {
+      if (recordingMode === 'webm' || recordingMode === 'ogg') {
         const chunks: Blob[] = [];
+        const mimeType = recordingMode === 'webm' ? 'audio/webm;codecs=opus' : 'audio/ogg;codecs=opus';
         const recorder = new MediaRecorder(stream, {
-          mimeType: 'audio/ogg;codecs=opus',
+          mimeType,
           audioBitsPerSecond: 32000,
         });
 
@@ -200,7 +207,7 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
             recordingTimeoutRef.current = null;
           }
 
-          const audioBlob = new Blob(chunks, { type: 'audio/ogg;codecs=opus' });
+          const audioBlob = new Blob(chunks, { type: mimeType });
           stopRecordingStream();
 
           if (!shouldProcessRef.current) {
@@ -209,7 +216,9 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
 
           setIsProcessing(true);
           try {
-            const text = await externalAI.transcribeAudio(audioBlob, { format: 'oggopus' });
+            const text = await externalAI.transcribeAudio(audioBlob, {
+              format: recordingMode === 'webm' ? 'webmopus' : 'oggopus',
+            });
             transcriptRef.current = text;
             setTranscript(text);
 
@@ -221,7 +230,8 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
             await handleProcessInput(text);
           } catch (error) {
             console.error('SpeechKit STT error', error);
-            setLastResponse('Не удалось распознать голосовой запрос через SpeechKit.');
+            const message = error instanceof Error ? error.message : 'Неизвестная ошибка SpeechKit STT';
+            setLastResponse(`Не удалось распознать голосовой запрос через SpeechKit: ${message}`);
           } finally {
             shouldProcessRef.current = false;
             setIsProcessing(false);
@@ -287,7 +297,8 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
             await handleProcessInput(text);
           } catch (error) {
             console.error('SpeechKit LPCM STT error', error);
-            setLastResponse('Не удалось распознать голосовой запрос через SpeechKit.');
+            const message = error instanceof Error ? error.message : 'Неизвестная ошибка SpeechKit STT';
+            setLastResponse(`Не удалось распознать голосовой запрос через SpeechKit: ${message}`);
           } finally {
             shouldProcessRef.current = false;
             setIsProcessing(false);
@@ -308,7 +319,7 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
     }
 
     if (isListening) {
-      if (recordingMode === 'ogg') {
+      if (recordingMode === 'webm' || recordingMode === 'ogg') {
         mediaRecorderRef.current?.stop();
       } else if (recordingMode === 'lpcm') {
         setIsListening(false);
@@ -335,7 +346,8 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
             await handleProcessInput(text);
           } catch (error) {
             console.error('SpeechKit LPCM STT error', error);
-            setLastResponse('Не удалось распознать голосовой запрос через SpeechKit.');
+            const message = error instanceof Error ? error.message : 'Неизвестная ошибка SpeechKit STT';
+            setLastResponse(`Не удалось распознать голосовой запрос через SpeechKit: ${message}`);
           } finally {
             shouldProcessRef.current = false;
             setIsProcessing(false);

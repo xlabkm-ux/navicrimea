@@ -78,9 +78,11 @@ const discoveryContent = {
 
 const getConfig = (key: string): string | undefined => {
   const envValue = process.env[key];
-  if (envValue) return envValue;
+  if (typeof envValue === 'string' && envValue.trim()) return envValue.trim();
   const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
-  return row?.value;
+  const value = row?.value;
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  return undefined;
 };
 
 const objectCount = db.prepare("SELECT COUNT(*) as count FROM objects").get() as { count: number };
@@ -545,9 +547,19 @@ async function startServer() {
 
     try {
       const lang = encodeURIComponent(String(req.query.lang || 'ru-RU'));
-      const format = String(req.query.format || 'oggopus').toLowerCase();
+      const requestedFormat = String(req.query.format || '').toLowerCase();
+      const contentTypeHeader = String(req.headers['content-type'] || '').toLowerCase();
+      const format =
+        requestedFormat === 'lpcm' || requestedFormat === 'webmopus' || requestedFormat === 'oggopus'
+          ? requestedFormat
+          : contentTypeHeader.includes('audio/webm')
+            ? 'webmopus'
+            : contentTypeHeader.includes('application/octet-stream')
+              ? 'lpcm'
+              : 'oggopus';
       const sampleRateHertz = String(req.query.sampleRateHertz || '48000');
-      const contentType = format === 'lpcm' ? 'application/octet-stream' : 'audio/ogg';
+      const contentType =
+        format === 'lpcm' ? 'application/octet-stream' : format === 'webmopus' ? 'audio/webm' : 'audio/ogg';
       const response = await fetch(
         `https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?topic=general&lang=${lang}&format=${encodeURIComponent(format)}${format === 'lpcm' ? `&sampleRateHertz=${encodeURIComponent(sampleRateHertz)}` : ''}`,
         {
@@ -561,9 +573,19 @@ async function startServer() {
         },
       );
 
-      const data: any = await response.json();
+      const rawBody = await response.text();
+      let data: any = null;
+      try {
+        data = rawBody ? JSON.parse(rawBody) : null;
+      } catch {
+        data = null;
+      }
       if (!response.ok) {
-        const errorMessage = data?.error_message || data?.message || `SpeechKit STT failed with status ${response.status}`;
+        const errorMessage =
+          data?.error_message ||
+          data?.message ||
+          rawBody ||
+          `SpeechKit STT failed with status ${response.status}`;
         return res.status(response.status).json({ text: errorMessage });
       }
 
