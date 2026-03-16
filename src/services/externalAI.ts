@@ -30,7 +30,7 @@ class ExternalAIService {
 
   async transcribeAudio(
     audioBlob: Blob,
-    options: { lang?: string; format?: 'oggopus' | 'webmopus' | 'lpcm'; sampleRateHertz?: number } = {},
+    options: { lang?: string; format?: 'oggopus' | 'lpcm'; sampleRateHertz?: number } = {},
   ): Promise<string> {
     const lang = options.lang || 'ru-RU';
     const format = options.format || 'oggopus';
@@ -40,7 +40,7 @@ class ExternalAIService {
       headers: {
         'Content-Type':
           audioBlob.type ||
-          (format === 'lpcm' ? 'application/octet-stream' : format === 'webmopus' ? 'audio/webm' : 'audio/ogg'),
+          (format === 'lpcm' ? 'application/octet-stream' : 'audio/ogg'),
       },
       body: audioBlob,
     });

@@ -12,7 +12,11 @@ dotenv.config();
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
-const db = new Database("platform.db");
+const configuredDbPath = process.env.DATABASE_PATH?.trim() || "platform.db";
+const resolvedDbPath = path.isAbsolute(configuredDbPath)
+  ? configuredDbPath
+  : path.join(process.cwd(), configuredDbPath);
+const db = new Database(resolvedDbPath);
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadsDir),
   filename: (_req, file, cb) => cb(null, `${Date.now()}${path.extname(file.originalname)}`),
@@ -151,8 +155,15 @@ const searchDiscoveryRecommendations = (message: string, regionId: string | null
   return matches;
 };
 
-const getYandexApiKey = () => getConfig('YANDEX_API_KEY') || getConfig('YANDEX_GPT_KEY');
-const getYandexFolderId = () => getConfig('YANDEX_FOLDER_ID');
+const getYandexApiKey = () =>
+  getConfig('YANDEX_API_KEY') ||
+  getConfig('YANDEX_GPT_KEY') ||
+  getConfig('YC_API_KEY') ||
+  getConfig('YANDEX_CLOUD_API_KEY');
+const getYandexFolderId = () =>
+  getConfig('YANDEX_FOLDER_ID') ||
+  getConfig('YC_FOLDER_ID') ||
+  getConfig('YANDEX_CLOUD_FOLDER_ID');
 const getYandexGptModel = () => getConfig('YANDEX_GPT_MODEL') || 'yandexgpt-lite';
 const getYandexTtsVoice = () => getConfig('YANDEX_TTS_VOICE') || 'alena';
 const assistantInstruction =
@@ -550,16 +561,13 @@ async function startServer() {
       const requestedFormat = String(req.query.format || '').toLowerCase();
       const contentTypeHeader = String(req.headers['content-type'] || '').toLowerCase();
       const format =
-        requestedFormat === 'lpcm' || requestedFormat === 'webmopus' || requestedFormat === 'oggopus'
+        requestedFormat === 'lpcm' || requestedFormat === 'oggopus'
           ? requestedFormat
-          : contentTypeHeader.includes('audio/webm')
-            ? 'webmopus'
-            : contentTypeHeader.includes('application/octet-stream')
+          : contentTypeHeader.includes('application/octet-stream')
               ? 'lpcm'
               : 'oggopus';
       const sampleRateHertz = String(req.query.sampleRateHertz || '48000');
-      const contentType =
-        format === 'lpcm' ? 'application/octet-stream' : format === 'webmopus' ? 'audio/webm' : 'audio/ogg';
+      const contentType = format === 'lpcm' ? 'application/octet-stream' : 'audio/ogg';
       const response = await fetch(
         `https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?topic=general&lang=${lang}&format=${encodeURIComponent(format)}${format === 'lpcm' ? `&sampleRateHertz=${encodeURIComponent(sampleRateHertz)}` : ''}`,
         {
