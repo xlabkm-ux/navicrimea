@@ -4410,7 +4410,7 @@ export default function App() {
           <motion.div 
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-[#130a26] overflow-hidden"
+            className="fixed inset-0 z-[100] bg-[#0B2A36] overflow-hidden"
           >
             <div className="grid grid-cols-3 grid-rows-2 h-full w-full">
               {heroImages.map((img, i) => (
@@ -4431,8 +4431,8 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <div className="absolute inset-0 bg-gradient-to-br from-[#120722]/80 via-[#1D1034]/70 to-[#2E1A52]/75" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(255,214,118,0.22),transparent_42%),radial-gradient(circle_at_82%_84%,rgba(128,83,255,0.34),transparent_38%)]" />
+            <div className="absolute inset-0 bg-gradient-to-br from-[#092630]/82 via-[#0D3F4F]/72 to-[#1A5E6E]/75" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(255,219,160,0.28),transparent_42%),radial-gradient(circle_at_82%_84%,rgba(255,122,92,0.28),transparent_38%)]" />
             <div className="absolute inset-0 flex items-center justify-center px-4 sm:px-6 pointer-events-none">
               <motion.div
                 initial={{ y: 22, opacity: 0 }}
@@ -4441,7 +4441,7 @@ export default function App() {
                 className="relative w-full max-w-4xl rounded-[36px] border border-white/20 bg-white/12 backdrop-blur-2xl shadow-[0_24px_90px_rgba(12,7,25,0.55)] p-6 sm:p-8 lg:p-10 pointer-events-auto"
               >
                 <div className="absolute -top-16 -right-10 w-44 h-44 bg-amber-300/25 rounded-full blur-3xl" />
-                <div className="absolute -bottom-20 -left-12 w-52 h-52 bg-violet-500/30 rounded-full blur-3xl" />
+                <div className="absolute -bottom-20 -left-12 w-52 h-52 bg-cyan-400/30 rounded-full blur-3xl" />
 
                 <div className="relative flex flex-col gap-8">
                   <div className="flex items-center gap-4 sm:gap-5">
@@ -4475,7 +4475,7 @@ export default function App() {
                   <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                     <button
                       onClick={() => setShowHero(false)}
-                      className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#7A12FF] to-[#4A2DFF] text-white rounded-2xl font-bold uppercase tracking-[0.2em] text-xs hover:brightness-110 active:scale-[0.99] transition-all shadow-2xl shadow-violet-700/35"
+                      className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#0D6D85] to-[#145E73] text-white rounded-2xl font-bold uppercase tracking-[0.2em] text-xs hover:brightness-110 active:scale-[0.99] transition-all shadow-2xl shadow-cyan-900/35"
                     >
                       Начать путешествие
                     </button>
@@ -4831,7 +4831,7 @@ export default function App() {
       </Suspense>
 
       {/* Navigation Rail */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl border-b border-accent-purple/10 px-3 md:px-5 py-2 flex flex-col gap-2">
+      <nav className="riviera-nav fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl border-b border-accent-purple/10 px-3 md:px-5 py-2 flex flex-col gap-2">
         <div className="flex items-center justify-between min-h-10 gap-3 flex-wrap">
           <div className="flex items-center gap-2 md:gap-3 shrink-0">
             <div className="flex items-center gap-2 cursor-pointer group" onClick={openRegionsCatalog}>
@@ -4843,7 +4843,7 @@ export default function App() {
               <span className="font-bold tracking-tight text-[1.5rem] md:text-[1.8rem] leading-none logo-gradient whitespace-nowrap">Навигатор Крым</span>
             </div>
           </div>
-          <div className="nav-menu flex items-center justify-center gap-1 2xl:gap-2.5 font-semibold text-black/88 flex-wrap flex-1 min-w-0">
+          <div className="nav-menu riviera-menu flex items-center justify-center gap-1 2xl:gap-2.5 font-semibold text-black/88 flex-wrap flex-1 min-w-0">
             <button 
               onClick={openRegionsCatalog}
               className={`nav-menu-item compact flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${viewMode === 'grid' && !selectedRegion ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-accent-purple/15 text-black/62 hover:text-black hover:bg-accent-purple/5'}`}
@@ -4909,10 +4909,10 @@ export default function App() {
         </div>
 
         {/* Booking-style Search Bar */}
-        <div className="flex items-center gap-3 pb-1 overflow-x-auto">
+        <div className="riviera-booking-row flex items-center gap-3 pb-1 overflow-x-auto">
           <button
             onClick={toggleAssistantPanel}
-            className="w-16 h-14 shrink-0 rounded-2xl flex items-center justify-center bg-accent-purple text-white shadow-2xl shadow-accent-purple/30 border border-accent-purple/20 transition-all hover:scale-[1.02]"
+            className="riviera-icon-btn w-16 h-14 shrink-0 rounded-2xl flex items-center justify-center bg-accent-purple text-white shadow-2xl shadow-accent-purple/30 border border-accent-purple/20 transition-all hover:scale-[1.02]"
             title={assistantOpen ? 'Закрыть Алису' : 'Открыть Алису'}
           >
             <Sparkles size={26} />
@@ -4925,13 +4925,13 @@ export default function App() {
                 'noopener,noreferrer'
               )
             }
-            className="w-16 h-14 shrink-0 rounded-2xl flex items-center justify-center bg-white text-accent-purple shadow-lg border border-accent-purple/20 transition-all hover:scale-[1.02]"
+            className="riviera-icon-btn riviera-icon-btn--ghost w-16 h-14 shrink-0 rounded-2xl flex items-center justify-center bg-white text-accent-purple shadow-lg border border-accent-purple/20 transition-all hover:scale-[1.02]"
             title="Открыть Яндекс Карты (Крым)"
           >
             <MapIcon size={24} />
           </button>
 
-          <div className="flex items-center bg-white border-2 border-amber-400 rounded-xl overflow-hidden shadow-lg flex-1 min-w-[760px] shrink-0">
+          <div className="riviera-search-shell flex items-center bg-white border-2 border-amber-400 rounded-xl overflow-hidden shadow-lg flex-1 min-w-[760px] shrink-0">
             <div 
               className="relative flex items-center px-4 border-r border-gray-200 flex-1"
               onClick={() => setShowDestinationPicker(true)}
@@ -4940,7 +4940,7 @@ export default function App() {
               <input 
                 type="text" 
                 placeholder="Куда вы хотите поехать?" 
-                className="w-full py-3 text-[11px] font-bold uppercase tracking-widest focus:outline-none placeholder:text-gray-400"
+                className="riviera-search-input w-full py-3 text-[11px] font-bold uppercase tracking-widest focus:outline-none placeholder:text-gray-400"
                 value={searchDestination}
                 onChange={(e) => {
                   setSearchDestination(e.target.value);
@@ -4978,7 +4978,7 @@ export default function App() {
             </div>
             <button 
               onClick={() => setSearchQuery(searchDestination)}
-              className="bg-blue-600 text-white px-10 py-3 font-bold uppercase tracking-widest text-[11px] hover:bg-blue-700 transition-colors inline-flex items-center justify-center gap-2"
+              className="riviera-book-btn bg-blue-600 text-white px-10 py-3 font-bold uppercase tracking-widest text-[11px] hover:bg-blue-700 transition-colors inline-flex items-center justify-center gap-2"
             >
               <Calendar size={14} />
               Забронировать
@@ -5118,7 +5118,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <main className="pt-28 lg:pt-32 min-h-screen bg-white flex flex-col md:flex-row">
+      <main className="pt-36 lg:pt-32 min-h-screen bg-white/90 flex flex-col md:flex-row">
         {/* Impressions Sidebar */}
         <AnimatePresence>
           {showImpressions && (
