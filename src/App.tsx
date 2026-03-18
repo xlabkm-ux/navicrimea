@@ -4909,7 +4909,7 @@ export default function App() {
         </div>
 
         {/* Booking-style Search Bar */}
-        <div className="hidden lg:flex items-center gap-3 pb-1">
+        <div className="flex items-center gap-3 pb-1 overflow-x-auto">
           <button
             onClick={toggleAssistantPanel}
             className="w-16 h-14 shrink-0 rounded-2xl flex items-center justify-center bg-accent-purple text-white shadow-2xl shadow-accent-purple/30 border border-accent-purple/20 transition-all hover:scale-[1.02]"
@@ -4931,7 +4931,7 @@ export default function App() {
             <MapIcon size={24} />
           </button>
 
-          <div className="flex items-center bg-white border-2 border-amber-400 rounded-xl overflow-hidden shadow-lg flex-1 min-w-0">
+          <div className="flex items-center bg-white border-2 border-amber-400 rounded-xl overflow-hidden shadow-lg flex-1 min-w-[760px] shrink-0">
             <div 
               className="relative flex items-center px-4 border-r border-gray-200 flex-1"
               onClick={() => setShowDestinationPicker(true)}
