@@ -13,10 +13,10 @@ type GeneratedRoute = {
 };
 
 const BEST_CASES = [
-  { id: 1, title: 'Золотое кольцо ЮБК', image: 'https://picsum.photos/seed/crimea1/800/600', description: 'Дворцы, парки и море' },
-  { id: 2, title: 'Винный путь', image: 'https://picsum.photos/seed/crimea2/800/600', description: 'Лучшие винодельни Севастополя' },
-  { id: 3, title: 'Пещерные города', image: 'https://picsum.photos/seed/crimea3/800/600', description: 'История Бахчисарая' },
-  { id: 4, title: 'Активный Тарханкут', image: 'https://picsum.photos/seed/crimea4/800/600', description: 'Дайвинг и скалы' },
+  { id: 1, title: 'Золотое кольцо ЮБК', image: '/images/hero-palace.svg', description: 'Дворцы, парки и море' },
+  { id: 2, title: 'Винный путь', image: '/images/hero-coast-1.svg', description: 'Лучшие винодельни Севастополя' },
+  { id: 3, title: 'Пещерные города', image: '/images/hero-cliff-1.svg', description: 'История Бахчисарая' },
+  { id: 4, title: 'Активный Тарханкут', image: '/images/hero-sea-night.svg', description: 'Дайвинг и скалы' },
 ];
 
 export const AIVoiceRoutePlanner = ({ onClose, onRouteGenerated, isVip = false }: any) => {

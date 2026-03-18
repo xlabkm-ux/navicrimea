@@ -3,6 +3,7 @@ import { createServer as createViteServer } from "vite";
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import multer from "multer";
 import dotenv from "dotenv";
 
@@ -79,6 +80,492 @@ const discoveryContent = {
     { id: 'safe-hiking', title: 'Безопасность на тропах', category: 'Трекинг', source: 'Навигатор Крым Advisory', summary: 'Вода, нескользящая обувь и расчет времени до заката.', details: 'Для новых маршрутов лучше выбирать популярные направления.', url: 'https://travel.example/crimea/trail-safety' },
   ],
 } as const;
+
+const localFallbackImages = [
+  '/images/hero-coast-1.svg',
+  '/images/hero-coast-2.svg',
+  '/images/hero-cliff-1.svg',
+  '/images/hero-cliff-2.svg',
+  '/images/hero-palace.svg',
+  '/images/hero-sea-night.svg',
+];
+
+const requiredPublicImageFiles = [
+  "hero-coast-1.svg",
+  "hero-coast-2.svg",
+  "hero-cliff-1.svg",
+  "hero-cliff-2.svg",
+  "hero-palace.svg",
+  "hero-sea-night.svg",
+  "stay-fiolent.svg",
+  "stay-sudak.svg",
+  "stay-villa-elena.svg",
+];
+
+const publicImageSearchQueries: Record<string, string> = {
+  "hero-coast-1.svg": "yalta crimea sea coast travel photo",
+  "hero-coast-2.svg": "sevastopol crimea sea bay photo",
+  "hero-cliff-1.svg": "crimea cliff coast landscape photo",
+  "hero-cliff-2.svg": "tarhankut crimea cliffs sea photo",
+  "hero-palace.svg": "vorontsov palace crimea photo",
+  "hero-sea-night.svg": "crimea black sea sunset photo",
+  "stay-fiolent.svg": "fiolent crimea guest house sea photo",
+  "stay-sudak.svg": "sudak crimea apartment sea view photo",
+  "stay-villa-elena.svg": "yalta villa hotel crimea photo",
+};
+
+const yandexRegionCoordinates: Record<string, { lat: number; lng: number }> = {
+  yalta: { lat: 44.4952, lng: 34.1663 },
+  sevastopol: { lat: 44.6167, lng: 33.5254 },
+  simferopol: { lat: 44.9521, lng: 34.1024 },
+  evpatoria: { lat: 45.1904, lng: 33.3669 },
+  kerch: { lat: 45.3562, lng: 36.4674 },
+  feodosia: { lat: 45.0319, lng: 35.3824 },
+  sudak: { lat: 44.8505, lng: 34.9769 },
+  bakhchisaray: { lat: 44.7517, lng: 33.8756 },
+  koktebel: { lat: 44.9605, lng: 35.242 },
+  alushta: { lat: 44.6764, lng: 34.4102 },
+  gurzuf: { lat: 44.5462, lng: 34.2784 },
+  foros: { lat: 44.3925, lng: 33.7876 },
+  balaklava: { lat: 44.5112, lng: 33.6001 },
+  inkerman: { lat: 44.6134, lng: 33.6087 },
+  saki: { lat: 45.1328, lng: 33.5998 },
+  chernomorskoe: { lat: 45.5064, lng: 32.6997 },
+  shchelkino: { lat: 45.4299, lng: 35.8244 },
+  belogorsk: { lat: 45.0542, lng: 34.6019 },
+};
+
+const photoCacheDir = path.join(uploadsDir, "photo-cache");
+const photoFallbackDir = path.join(photoCacheDir, "fallback");
+const publicImagesDir = path.join(process.cwd(), "public", "images");
+
+type PhotosPayload = {
+  source: string;
+  images: string[];
+  fallbackImages: string[];
+  diskFallbackImages: string[];
+  updatedAt: number;
+};
+
+const PHOTO_CACHE_TTL_MS = Number(process.env.PHOTO_CACHE_TTL_MS || 1000 * 60 * 60 * 6);
+const regionPhotoCache = new Map<string, { updatedAt: number; payload: PhotosPayload }>();
+const regionPhotoInFlight = new Map<string, Promise<PhotosPayload>>();
+
+const regionNameToId: Record<string, string> = {
+  "ялта": "yalta",
+  "севастополь": "sevastopol",
+  "симферополь": "simferopol",
+  "евпатория": "evpatoria",
+  "керчь": "kerch",
+  "феодосия": "feodosia",
+  "судак": "sudak",
+  "бахчисарай": "bakhchisaray",
+  "коктебель": "koktebel",
+  "алушта": "alushta",
+  "гурзуф": "gurzuf",
+  "форос": "foros",
+  "балаклава": "balaklava",
+  "инкерман": "inkerman",
+  "саки": "saki",
+  "черноморское": "chernomorskoe",
+  "щелкино": "shchelkino",
+  "щёлкино": "shchelkino",
+  "белогорск": "belogorsk",
+};
+
+const regionIdToSearchKeyword: Record<string, string> = {
+  yalta: "yalta",
+  sevastopol: "sevastopol",
+  simferopol: "simferopol",
+  evpatoria: "evpatoria",
+  kerch: "kerch",
+  feodosia: "feodosia",
+  sudak: "sudak",
+  bakhchisaray: "bakhchisaray",
+  koktebel: "koktebel",
+  alushta: "alushta",
+  gurzuf: "gurzuf",
+  foros: "foros",
+  balaklava: "balaklava",
+  inkerman: "inkerman",
+  saki: "saki",
+  chernomorskoe: "chernomorskoe",
+  shchelkino: "shchelkino",
+  belogorsk: "belogorsk",
+};
+
+const ensureDir = (dirPath: string) => {
+  if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+};
+
+const isValidHttpUrl = (value: string) => /^https?:\/\/[^ "]+$/i.test(value);
+
+const blockedImageHosts = [
+  "shutterstock.com",
+  "depositphotos.com",
+  "istockphoto.com",
+  "gettyimages.com",
+  "adobe.com",
+  "alamy.com",
+  "123rf.com",
+  "dreamstime.com",
+  "freepik.com",
+  "pikbest.com",
+];
+
+const normalizeImageUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+    return `${url.protocol}//${url.host}${url.pathname}`;
+  } catch {
+    return value.split("?")[0].split("#")[0];
+  }
+};
+
+const isBlockedImageUrl = (value: string) => {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("watermark")) return true;
+  return blockedImageHosts.some((host) => normalized.includes(host));
+};
+
+const detectRegionIdFromQuery = (query: string): string | null => {
+  const normalized = query.toLowerCase();
+  for (const [name, id] of Object.entries(regionNameToId)) {
+    if (normalized.includes(name)) return id;
+  }
+  for (const id of Object.keys(yandexRegionCoordinates)) {
+    if (normalized.includes(id)) return id;
+  }
+  return null;
+};
+
+const buildSearchQueryText = (query: string) => {
+  const regionId = detectRegionIdFromQuery(query || "");
+  const regionKeyword = regionId ? regionIdToSearchKeyword[regionId] : "";
+  const latinOnly = String(query || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const base = regionKeyword || latinOnly || "crimea";
+  return `${base} crimea nature landscape travel photo`;
+};
+
+const buildSearchQueryVariants = (query: string) => {
+  const regionId = detectRegionIdFromQuery(query || "");
+  const regionKeyword = regionId ? regionIdToSearchKeyword[regionId] : "crimea";
+  const variants = [
+    buildSearchQueryText(query),
+    `${regionKeyword} crimea sea coast panoramic view`,
+    `${regionKeyword} crimea mountains nature landscape`,
+    `${regionKeyword} crimea old city travel photo`,
+  ];
+  return Array.from(new Set(variants.map((value) => value.trim()).filter(Boolean)));
+};
+
+const buildLocalRegionFallbacks = (query: string) => {
+  const regionId = detectRegionIdFromQuery(query);
+  if (!regionId) return [...localFallbackImages];
+  const offset = Object.keys(yandexRegionCoordinates).indexOf(regionId);
+  if (offset < 0) return [...localFallbackImages];
+  return localFallbackImages.map((_, index) => localFallbackImages[(index + offset) % localFallbackImages.length]);
+};
+
+const ensureFallbackFilesOnDisk = (fallbacks: string[]) => {
+  ensureDir(photoFallbackDir);
+  const diskUrls: string[] = [];
+  for (const relativePath of fallbacks) {
+    const fileName = path.basename(relativePath);
+    const sourcePath = path.join(process.cwd(), "public", relativePath.replace(/^\/+/, ""));
+    const destPath = path.join(photoFallbackDir, fileName);
+    if (fs.existsSync(sourcePath) && !fs.existsSync(destPath)) {
+      fs.copyFileSync(sourcePath, destPath);
+    }
+    if (fs.existsSync(destPath)) {
+      diskUrls.push(`/uploads/photo-cache/fallback/${fileName}`);
+    }
+  }
+  return diskUrls;
+};
+
+const decodeXmlEntities = (value: string) =>
+  value
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+
+const parseImageLinksFromXml = (xml: string) => {
+  if (/<error code="2">/i.test(xml) || /<error[^>]*>.*пустой поисковый запрос/i.test(xml)) {
+    return [];
+  }
+  const primaryMatches = xml.match(/<image-link>([^<]+)<\/image-link>/gi) || [];
+  const secondaryMatches = xml.match(/<url>(https?:\/\/[^<]+)<\/url>/gi) || [];
+  const extractValue = (tag: string) => decodeXmlEntities(tag.replace(/^<[^>]+>/, "").replace(/<\/[^>]+>$/, "").trim());
+
+  const raw = [...primaryMatches.map(extractValue), ...secondaryMatches.map(extractValue)];
+  return Array.from(new Set(raw))
+    .filter((url) => isValidHttpUrl(url))
+    .filter((url) => !isBlockedImageUrl(url))
+    .filter((url) => !url.includes("favicon"))
+    .filter((url) => !url.includes("icon"))
+    .filter((url) => !url.includes("logo"))
+    .filter((url) => !/thumbnail|thumb|preview/i.test(url))
+    .slice(0, 24);
+};
+
+const decodeRawDataToXml = (rawData: string) => {
+  const trimmed = rawData.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("<")) return trimmed;
+  try {
+    const decoded = Buffer.from(trimmed, "base64").toString("utf-8");
+    return decoded.startsWith("<") ? decoded : "";
+  } catch {
+    return "";
+  }
+};
+
+const createPhotoSvg = (mime: string, bytes: Buffer) => {
+  const safeMime = mime.startsWith("image/") ? mime : "image/jpeg";
+  const base64 = bytes.toString("base64");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMid slice">
+  <image href="data:${safeMime};base64,${base64}" x="0" y="0" width="1200" height="900" preserveAspectRatio="xMidYMid slice"/>
+</svg>`;
+};
+
+const createPlaceholderSvg = (title: string) => `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1f2a56"/>
+      <stop offset="100%" stop-color="#5f7bb0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <circle cx="980" cy="180" r="72" fill="#f4eecf" opacity="0.9"/>
+  <text x="80" y="780" fill="#ffffff" font-size="54" font-family="Arial, sans-serif" opacity="0.88">${title}</text>
+</svg>`;
+
+const extractYandexImageUrls = async (queryText: string) => {
+  const apiKey = getConfig("YANDEX_SEARCH_API_KEY") || getYandexApiKey();
+  const folderId = getYandexFolderId();
+  if (!apiKey || !folderId) return [];
+
+  const response = await fetch("https://searchapi.api.cloud.yandex.net/v2/image/search", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Api-Key ${apiKey}`,
+    },
+    body: JSON.stringify({
+      folderId,
+      query: {
+        queryText,
+        searchType: "SEARCH_TYPE_RU",
+      },
+      imageSpec: {
+        imageSize: "LARGE",
+      },
+      docsOnPage: 20,
+      page: 0,
+    }),
+  });
+
+  if (!response.ok) return [];
+  const payload = await response.json().catch(() => null);
+  const rawData = typeof payload?.rawData === "string" ? payload.rawData : "";
+  const xml = decodeRawDataToXml(rawData);
+  if (!xml) return [];
+
+  return parseImageLinksFromXml(xml);
+};
+
+const downloadImageToCache = async (imageUrl: string) => {
+  try {
+    const response = await fetch(imageUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+    if (!response.ok) return null;
+    const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.startsWith("image/")) return null;
+    const ext = contentType.includes("png")
+      ? "png"
+      : contentType.includes("webp")
+        ? "webp"
+        : "jpg";
+    ensureDir(photoCacheDir);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length < 8_000) return null;
+    const hash = crypto.createHash("sha1").update(bytes).digest("hex").slice(0, 20);
+    const fileName = `${hash}.${ext}`;
+    const fullPath = path.join(photoCacheDir, fileName);
+    if (fs.existsSync(fullPath)) {
+      const existingSize = fs.statSync(fullPath).size;
+      if (existingSize < 60_000) {
+        fs.unlinkSync(fullPath);
+        return null;
+      }
+      return `/uploads/photo-cache/${fileName}`;
+    }
+    if (bytes.length < 60_000) return null;
+    fs.writeFileSync(fullPath, bytes);
+    return `/uploads/photo-cache/${fileName}`;
+  } catch {
+    return null;
+  }
+};
+
+const fetchPhotoBytes = async (imageUrl: string) => {
+  try {
+    const response = await fetch(imageUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+    if (!response.ok) return null;
+    const mime = String(response.headers.get("content-type") || "").toLowerCase();
+    if (!mime.startsWith("image/")) return null;
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length < 8_000) return null;
+    return { mime, bytes };
+  } catch {
+    return null;
+  }
+};
+
+const getPhotoCacheKey = (query: string) => {
+  const regionId = detectRegionIdFromQuery(query);
+  if (regionId) return `region:${regionId}`;
+  return `query:${String(query || "crimea").trim().toLowerCase() || "crimea"}`;
+};
+
+const buildPhotosPayload = async (query: string): Promise<PhotosPayload> => {
+  const localFallback = buildLocalRegionFallbacks(query);
+  const diskFallback = ensureFallbackFilesOnDisk(localFallback);
+  const imagesFromYandex: string[] = [];
+
+  try {
+    const variants = buildSearchQueryVariants(query);
+    const uniqueCandidates = new Set<string>();
+
+    for (const variant of variants) {
+      const yandexCandidates = await extractYandexImageUrls(variant);
+      for (const candidateUrl of yandexCandidates) {
+        const normalized = normalizeImageUrl(candidateUrl);
+        if (!normalized || uniqueCandidates.has(normalized)) continue;
+        uniqueCandidates.add(normalized);
+        if (uniqueCandidates.size >= 40) break;
+      }
+      if (uniqueCandidates.size >= 40) break;
+    }
+
+    for (const candidateUrl of uniqueCandidates) {
+      const cachedUrl = await downloadImageToCache(candidateUrl);
+      if (cachedUrl) {
+        imagesFromYandex.push(cachedUrl);
+      }
+      if (imagesFromYandex.length >= 12) break;
+    }
+  } catch (err) {
+    console.error("Yandex photo search error:", err);
+  }
+
+  if (imagesFromYandex.length > 0) {
+    return {
+      source: "Yandex Photos (cached on server disk)",
+      images: imagesFromYandex,
+      fallbackImages: localFallback,
+      diskFallbackImages: diskFallback,
+      updatedAt: Date.now(),
+    };
+  }
+
+  if (localFallback.length > 0) {
+    return {
+      source: "Local curated fallback",
+      images: localFallback,
+      fallbackImages: localFallback,
+      diskFallbackImages: diskFallback,
+      updatedAt: Date.now(),
+    };
+  }
+
+  return {
+    source: "Server disk fallback",
+    images: diskFallback,
+    fallbackImages: diskFallback,
+    diskFallbackImages: diskFallback,
+    updatedAt: Date.now(),
+  };
+};
+
+const getRegionPhotos = async (query: string, forceRefresh = false): Promise<PhotosPayload> => {
+  const cacheKey = getPhotoCacheKey(query);
+  const now = Date.now();
+  const cached = regionPhotoCache.get(cacheKey);
+
+  if (!forceRefresh && cached && now - cached.updatedAt < PHOTO_CACHE_TTL_MS) {
+    return cached.payload;
+  }
+
+  if (!forceRefresh && cached && now - cached.updatedAt >= PHOTO_CACHE_TTL_MS) {
+    if (!regionPhotoInFlight.has(cacheKey)) {
+      const refreshPromise = buildPhotosPayload(query)
+        .then((payload) => {
+          regionPhotoCache.set(cacheKey, { updatedAt: Date.now(), payload });
+          return payload;
+        })
+        .finally(() => {
+          regionPhotoInFlight.delete(cacheKey);
+        });
+      regionPhotoInFlight.set(cacheKey, refreshPromise);
+    }
+    return cached.payload;
+  }
+
+  const inFlight = regionPhotoInFlight.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const refreshPromise = buildPhotosPayload(query)
+    .then((payload) => {
+      regionPhotoCache.set(cacheKey, { updatedAt: Date.now(), payload });
+      return payload;
+    })
+    .finally(() => {
+      regionPhotoInFlight.delete(cacheKey);
+    });
+  regionPhotoInFlight.set(cacheKey, refreshPromise);
+  return refreshPromise;
+};
+
+const populatePublicImagesIfEmpty = async () => {
+  ensureDir(publicImagesDir);
+  const existing = fs.readdirSync(publicImagesDir).filter((name) => !name.startsWith("."));
+  if (existing.length > 0) return;
+
+  console.log("public/images is empty, downloading a fresh image set...");
+  for (const fileName of requiredPublicImageFiles) {
+    const targetPath = path.join(publicImagesDir, fileName);
+    const query = publicImageSearchQueries[fileName] || "crimea nature travel photo";
+    let written = false;
+
+    try {
+      const candidates = await extractYandexImageUrls(query);
+      for (const candidate of candidates) {
+        const photo = await fetchPhotoBytes(candidate);
+        if (!photo) continue;
+        fs.writeFileSync(targetPath, createPhotoSvg(photo.mime, photo.bytes), "utf8");
+        written = true;
+        break;
+      }
+    } catch (error) {
+      console.error(`Failed to fetch image for ${fileName}:`, error);
+    }
+
+    if (!written) {
+      fs.writeFileSync(targetPath, createPlaceholderSvg(fileName.replace(".svg", "")), "utf8");
+    }
+  }
+};
 
 const getConfig = (key: string): string | undefined => {
   const envValue = process.env[key];
@@ -426,6 +913,7 @@ const buildObjectSearchActions = (
 
 async function startServer() {
   const app = express();
+  await populatePublicImagesIfEmpty();
   app.use(express.json());
   app.use('/uploads', express.static(uploadsDir));
   const PORT = Number(process.env.PORT ?? 3000);
@@ -662,13 +1150,33 @@ async function startServer() {
     res.json(buildLocalRoute(prompt));
   });
 
-  app.get('/api/v1/photos/search', async (req, res) => {
+  app.get(['/api/v1/photos/search', '/api/v2/photos/search'], async (req, res) => {
     const query = String(req.query.query || 'crimea');
-    const apiKey = getConfig('YANDEX_SEARCH_API_KEY');
-    if (!apiKey) {
-      return res.json({ source: 'Local Cache', images: [`https://picsum.photos/seed/${query}_1/800/600`, `https://picsum.photos/seed/${query}_2/800/600`] });
+    const forceRefresh = String(req.query.refresh || "").toLowerCase() === "1";
+    const payload = await getRegionPhotos(query, forceRefresh);
+    res.setHeader('Cache-Control', 'public, max-age=120');
+    res.json(payload);
+  });
+
+  app.post('/api/v2/photos/refresh', async (req, res) => {
+    const query = String(req.body?.query || '').trim();
+    if (query) {
+      const payload = await getRegionPhotos(query, true);
+      return res.json({ refreshed: [query], payload });
     }
-    res.json({ source: 'Yandex', images: [`https://picsum.photos/seed/${query}_y1/800/600`, `https://picsum.photos/seed/${query}_y2/800/600`] });
+
+    const regions = Object.keys(yandexRegionCoordinates);
+    const refreshed: string[] = [];
+    for (const regionId of regions) {
+      await getRegionPhotos(regionId, true);
+      refreshed.push(regionId);
+    }
+    res.json({ refreshed, total: refreshed.length });
+  });
+
+  // Prevent unknown API paths from falling through to SPA HTML.
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'API route not found' });
   });
 
   if (process.env.NODE_ENV !== 'production') {

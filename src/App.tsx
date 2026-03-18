@@ -188,25 +188,36 @@ const CRIMEA_CITIES = [
   },
 ];
 
+const LOCAL_FALLBACK_IMAGES = [
+  '/images/hero-coast-1.svg',
+  '/images/hero-coast-2.svg',
+  '/images/hero-cliff-1.svg',
+  '/images/hero-cliff-2.svg',
+  '/images/hero-palace.svg',
+  '/images/hero-sea-night.svg',
+];
+
+const getFallbackImage = (index: number) => LOCAL_FALLBACK_IMAGES[index % LOCAL_FALLBACK_IMAGES.length];
+
 const CRIMEA_REGIONS = [
-  { id: 'yalta', name: 'Ялта', image: 'https://picsum.photos/seed/yalta/800/600' },
-  { id: 'sevastopol', name: 'Севастополь', image: 'https://picsum.photos/seed/sevastopol/800/600' },
-  { id: 'simferopol', name: 'Симферополь', image: 'https://picsum.photos/seed/simferopol/800/600' },
-  { id: 'evpatoria', name: 'Евпатория', image: 'https://picsum.photos/seed/evpatoria/800/600' },
-  { id: 'kerch', name: 'Керчь', image: 'https://picsum.photos/seed/kerch/800/600' },
-  { id: 'feodosia', name: 'Феодосия', image: 'https://picsum.photos/seed/feodosia/800/600' },
-  { id: 'sudak', name: 'Судак', image: 'https://picsum.photos/seed/sudak/800/600' },
-  { id: 'bakhchisaray', name: 'Бахчисарай', image: 'https://picsum.photos/seed/bakhchisaray/800/600' },
-  { id: 'koktebel', name: 'Коктебель', image: 'https://picsum.photos/seed/koktebel/800/600' },
-  { id: 'alushta', name: 'Алушта', image: 'https://picsum.photos/seed/alushta/800/600' },
-  { id: 'gurzuf', name: 'Гурзуф', image: 'https://picsum.photos/seed/gurzuf/800/600' },
-  { id: 'foros', name: 'Форос', image: 'https://picsum.photos/seed/foros/800/600' },
-  { id: 'balaklava', name: 'Балаклава', image: 'https://picsum.photos/seed/balaklava/800/600' },
-  { id: 'inkerman', name: 'Инкерман', image: 'https://picsum.photos/seed/inkerman/800/600' },
-  { id: 'saki', name: 'Саки', image: 'https://picsum.photos/seed/saki/800/600' },
-  { id: 'chernomorskoe', name: 'Черноморское', image: 'https://picsum.photos/seed/chernomorskoe/800/600' },
-  { id: 'shchelkino', name: 'Щёлкино', image: 'https://picsum.photos/seed/shchelkino/800/600' },
-  { id: 'belogorsk', name: 'Белогорск', image: 'https://picsum.photos/seed/belogorsk/800/600' },
+  { id: 'yalta', name: 'Ялта', image: getFallbackImage(0), fallbackImage: getFallbackImage(0) },
+  { id: 'sevastopol', name: 'Севастополь', image: getFallbackImage(1), fallbackImage: getFallbackImage(1) },
+  { id: 'simferopol', name: 'Симферополь', image: getFallbackImage(2), fallbackImage: getFallbackImage(2) },
+  { id: 'evpatoria', name: 'Евпатория', image: getFallbackImage(3), fallbackImage: getFallbackImage(3) },
+  { id: 'kerch', name: 'Керчь', image: getFallbackImage(4), fallbackImage: getFallbackImage(4) },
+  { id: 'feodosia', name: 'Феодосия', image: getFallbackImage(5), fallbackImage: getFallbackImage(5) },
+  { id: 'sudak', name: 'Судак', image: getFallbackImage(0), fallbackImage: getFallbackImage(0) },
+  { id: 'bakhchisaray', name: 'Бахчисарай', image: getFallbackImage(1), fallbackImage: getFallbackImage(1) },
+  { id: 'koktebel', name: 'Коктебель', image: getFallbackImage(2), fallbackImage: getFallbackImage(2) },
+  { id: 'alushta', name: 'Алушта', image: getFallbackImage(3), fallbackImage: getFallbackImage(3) },
+  { id: 'gurzuf', name: 'Гурзуф', image: getFallbackImage(4), fallbackImage: getFallbackImage(4) },
+  { id: 'foros', name: 'Форос', image: getFallbackImage(5), fallbackImage: getFallbackImage(5) },
+  { id: 'balaklava', name: 'Балаклава', image: getFallbackImage(0), fallbackImage: getFallbackImage(0) },
+  { id: 'inkerman', name: 'Инкерман', image: getFallbackImage(1), fallbackImage: getFallbackImage(1) },
+  { id: 'saki', name: 'Саки', image: getFallbackImage(2), fallbackImage: getFallbackImage(2) },
+  { id: 'chernomorskoe', name: 'Черноморское', image: getFallbackImage(3), fallbackImage: getFallbackImage(3) },
+  { id: 'shchelkino', name: 'Щёлкино', image: getFallbackImage(4), fallbackImage: getFallbackImage(4) },
+  { id: 'belogorsk', name: 'Белогорск', image: getFallbackImage(5), fallbackImage: getFallbackImage(5) },
 ];
 
 interface POI {
@@ -1478,6 +1489,9 @@ export default function App() {
   const [showImpressions, setShowImpressions] = useState(false);
   const [yandexPhotos, setYandexPhotos] = useState<string[]>([]);
   const [showPhotoGallery, setShowPhotoGallery] = useState(false);
+  const [regionCoverById, setRegionCoverById] = useState<Record<string, string>>({});
+  const [regionPhotoPoolById, setRegionPhotoPoolById] = useState<Record<string, string[]>>({});
+  const [visitNonce] = useState(() => `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
   const [preferences, setPreferences] = useState<{
     budget?: string;
     interests: string[];
@@ -1486,6 +1500,79 @@ export default function App() {
   }>({
     interests: []
   });
+
+  const handleImageFallback = (event: React.SyntheticEvent<HTMLImageElement>, fallbackSrc: string) => {
+    const image = event.currentTarget;
+    image.onerror = null;
+    image.src = fallbackSrc;
+  };
+
+  const uniqueImageUrls = (urls: string[]) => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const raw of urls) {
+      if (typeof raw !== 'string' || !raw.trim()) continue;
+      const normalized = raw.split('?')[0].split('#')[0];
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      result.push(raw);
+    }
+    return result;
+  };
+
+  const shuffleByVisit = (items: string[], key: string) => {
+    const input = [...items];
+    for (let i = input.length - 1; i > 0; i--) {
+      const mixed = `${visitNonce}:${key}:${i}`;
+      let hash = 0;
+      for (let j = 0; j < mixed.length; j++) {
+        hash = (hash * 31 + mixed.charCodeAt(j)) | 0;
+      }
+      const next = Math.abs(hash) % (i + 1);
+      [input[i], input[next]] = [input[next], input[i]];
+    }
+    return input;
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRegionPhotos = async () => {
+      const results = await Promise.all(
+        CRIMEA_REGIONS.map(async (region) => {
+          try {
+            const response = await fetch(`/api/v2/photos/search?query=${encodeURIComponent(region.name)}`);
+            const data = await response.json();
+            const images = Array.isArray(data?.images) ? data.images : [];
+            const fallbackImages = Array.isArray(data?.fallbackImages) ? data.fallbackImages : [];
+            const diskFallbackImages = Array.isArray(data?.diskFallbackImages) ? data.diskFallbackImages : [];
+            const pool = uniqueImageUrls([...images, ...fallbackImages, ...diskFallbackImages].filter((value) => typeof value === 'string'));
+            const shuffledPool = shuffleByVisit(pool.length ? pool : [region.fallbackImage], region.id);
+            return [region.id, shuffledPool] as [string, string[]];
+          } catch {
+            const shuffledFallback = shuffleByVisit([region.fallbackImage], region.id);
+            return [region.id, shuffledFallback] as [string, string[]];
+          }
+        })
+      );
+
+      if (cancelled) return;
+
+      const covers: Record<string, string> = {};
+      const pools: Record<string, string[]> = {};
+      for (const [regionId, pool] of results) {
+        pools[regionId] = pool;
+        covers[regionId] = pool[0];
+      }
+      setRegionPhotoPoolById(pools);
+      setRegionCoverById(covers);
+    };
+
+    void loadRegionPhotos();
+    return () => {
+      cancelled = true;
+    };
+  }, [visitNonce]);
 
   const handleAIAction = (action: any) => {
     if (action.type === 'update_preferences') {
@@ -1508,11 +1595,15 @@ export default function App() {
         setShowRoutePlanner(true);
       }
     } else if (action.type === 'search_photos') {
-      fetch(`/api/v1/photos/search?query=${encodeURIComponent(action.payload.query)}`)
+        fetch(`/api/v2/photos/search?query=${encodeURIComponent(action.payload.query)}`)
         .then(res => res.json())
         .then(data => {
-          if (data.images) {
-            setYandexPhotos(data.images);
+          const images = Array.isArray(data.images) ? data.images : [];
+          const fallbackImages = Array.isArray(data.fallbackImages) ? data.fallbackImages : [];
+          const diskFallbackImages = Array.isArray(data.diskFallbackImages) ? data.diskFallbackImages : [];
+          const pool = [...images, ...fallbackImages, ...diskFallbackImages];
+          if (pool.length) {
+            setYandexPhotos(pool);
             setShowPhotoGallery(true);
           }
         });
@@ -1816,7 +1907,7 @@ export default function App() {
       category: 'culture', 
       rating: 5, 
       comment: 'Потрясающий вид на море! Обязательно к посещению.', 
-      photos: ['https://picsum.photos/seed/castle/400/300'], 
+      photos: ['/images/hero-palace.svg'],
       timestamp: Date.now() - 86400000 * 2,
       yandexSynced: true
     }
@@ -1969,7 +2060,7 @@ export default function App() {
       dates: '12.03 - 15.03',
       status: 'confirmed',
       price: 12500,
-      photo: 'https://picsum.photos/seed/guest1/100/100'
+      photo: '/images/hero-coast-1.svg'
     },
     {
       id: 2,
@@ -1978,7 +2069,7 @@ export default function App() {
       dates: '20.03 - 25.03',
       status: 'pending',
       price: 45000,
-      photo: 'https://picsum.photos/seed/guest2/100/100'
+      photo: '/images/hero-coast-2.svg'
     }
   ];
 
@@ -1989,7 +2080,7 @@ export default function App() {
       lastMessage: 'Здравствуйте! Можно ли заехать пораньше?',
       time: '10:30',
       unread: true,
-      photo: 'https://picsum.photos/seed/guest1/100/100'
+      photo: '/images/hero-cliff-1.svg'
     },
     {
       id: 2,
@@ -1997,7 +2088,7 @@ export default function App() {
       lastMessage: 'Спасибо за отличный отдых!',
       time: 'Вчера',
       unread: false,
-      photo: 'https://picsum.photos/seed/guest3/100/100'
+      photo: '/images/hero-cliff-2.svg'
     }
   ];
 
@@ -2081,7 +2172,7 @@ export default function App() {
     phoneVerified: false,
     email: 'alex@crimea.ru',
     emailVerified: false,
-    photo: 'https://picsum.photos/seed/user/200/200',
+    photo: '/images/hero-sea-night.svg',
     rating: 4.9,
     completedOrders: 12,
     verifications: {
@@ -2316,11 +2407,11 @@ export default function App() {
   };
 
   const heroImages = [
-    { url: "https://picsum.photos/seed/lagoon1/1200/800", title: "Lagoon 1" },
-    { url: "https://picsum.photos/seed/lagoon2/1200/800", title: "Lagoon 2" },
-    { url: "https://picsum.photos/seed/lagoon3/1200/800", title: "Lagoon 3" },
-    { url: "https://picsum.photos/seed/lagoon4/1200/800", title: "Lagoon 4" },
-    { url: "https://picsum.photos/seed/museum1/1200/800", title: "Museum" },
+    { url: "/images/hero-coast-1.svg", title: "Coast" },
+    { url: "/images/hero-coast-2.svg", title: "Coast 2" },
+    { url: "/images/hero-cliff-1.svg", title: "Cliff" },
+    { url: "/images/hero-cliff-2.svg", title: "Cliff 2" },
+    { url: "/images/hero-palace.svg", title: "Palace" },
     { url: "", title: "Map" }, // Placeholder for Yandex Map
   ];
 
@@ -2532,18 +2623,27 @@ export default function App() {
     if (!selectedRegion) return [];
     
     const regionName = CRIMEA_REGIONS.find(r => r.id === selectedRegion)?.name || '';
+    const photoPool = regionPhotoPoolById[selectedRegion] || [];
     const regionObjects = filteredObjects.slice(0, 9);
     
-    // Generate 18 photos: mix of views and properties
+    const selectedRegionMeta = CRIMEA_REGIONS.find((r) => r.id === selectedRegion);
+    const fallbackImage = selectedRegionMeta?.fallbackImage || LOCAL_FALLBACK_IMAGES[0];
+    // Generate 18 photos: mix of remote Yandex photos and local fallbacks
     const gallery = [];
     
-    // Add views (simulating Yandex Maps data)
+    const getPoolImage = (index: number) => {
+      if (photoPool.length === 0) return fallbackImage;
+      return photoPool[index % photoPool.length] || fallbackImage;
+    };
+
+    // Add location views
     for (let i = 1; i <= 9; i++) {
       gallery.push({
         id: `view-${selectedRegion}-${i}`,
-        url: `https://picsum.photos/seed/${selectedRegion}-view-${i}/800/600`,
+        url: getPoolImage(i - 1),
         title: `${regionName} - Вид ${i}`,
-        type: 'view'
+        type: 'view',
+        fallback: fallbackImage,
       });
     }
     
@@ -2554,6 +2654,7 @@ export default function App() {
         url: obj.image_url,
         title: obj.name,
         type: 'property',
+        fallback: fallbackImage,
         originalObj: obj
       });
     });
@@ -2563,15 +2664,16 @@ export default function App() {
     while (gallery.length < 18) {
       gallery.push({
         id: `view-fill-${fillCounter}`,
-        url: `https://picsum.photos/seed/${selectedRegion}-fill-${fillCounter}/800/600`,
+        url: getPoolImage(fillCounter),
         title: `${regionName} - Пейзаж`,
-        type: 'view'
+        type: 'view',
+        fallback: fallbackImage,
       });
       fillCounter++;
     }
     
     return gallery.slice(0, 18);
-  }, [selectedRegion, filteredObjects]);
+  }, [selectedRegion, filteredObjects, regionPhotoPoolById]);
 
   // Simple coordinate to SVG percentage conversion
   const getPos = (lat: number, lng: number) => {
@@ -3692,7 +3794,7 @@ export default function App() {
                                   </button>
                                   {[1, 2, 3].map(i => (
                                     <div key={i} className="aspect-square bg-black/5 rounded-2xl overflow-hidden relative group">
-                                      <img src={`https://picsum.photos/seed/${i + 10}/200`} alt="Preview" className="w-full h-full object-cover opacity-50" />
+                                      <img src={LOCAL_FALLBACK_IMAGES[i % LOCAL_FALLBACK_IMAGES.length]} alt="Preview" className="w-full h-full object-cover opacity-50" />
                                       <button className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity">
                                         <Trash2 size={16} className="text-white" />
                                       </button>
@@ -4397,7 +4499,7 @@ export default function App() {
               <div className="absolute inset-0">
                 <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-purple-600/20 rounded-full blur-[160px] animate-pulse" />
                 <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-blue-600/20 rounded-full blur-[160px] animate-pulse" />
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10" />
+              <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_1px_1px,rgba(0,0,0,0.28)_1px,transparent_0)] [background-size:14px_14px]" />
               </div>
 
               <motion.div 
@@ -5080,7 +5182,8 @@ export default function App() {
                           src={item.url} 
                           alt={item.title} 
                           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
-                          referrerPolicy="no-referrer" 
+                          referrerPolicy="no-referrer"
+                          onError={(event) => handleImageFallback(event, item.fallback || LOCAL_FALLBACK_IMAGES[0])}
                         />
                         <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
                           <span className="text-[8px] text-white font-bold uppercase tracking-widest truncate">{item.title}</span>
@@ -5293,7 +5396,13 @@ export default function App() {
                           }}
                           className="relative aspect-[4/3] rounded-xl md:rounded-[32px] overflow-hidden cursor-pointer group shadow-lg"
                         >
-                          <img src={region.image} alt={region.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" referrerPolicy="no-referrer" />
+                          <img
+                            src={regionCoverById[region.id] || region.image}
+                            alt={region.name}
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                            referrerPolicy="no-referrer"
+                            onError={(event) => handleImageFallback(event, region.fallbackImage)}
+                          />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                           <div className="absolute bottom-3 left-4 md:bottom-6 md:left-6">
                             <h3 className="text-white text-sm md:text-2xl font-serif">{region.name}</h3>
@@ -5688,7 +5797,13 @@ export default function App() {
                       transition={{ delay: i * 0.1 }}
                       className="aspect-square rounded-3xl overflow-hidden group relative"
                     >
-                      <img src={url} alt={`Yandex ${i}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                      <img
+                        src={url}
+                        alt={`Yandex ${i}`}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                        referrerPolicy="no-referrer"
+                        onError={(event) => handleImageFallback(event, LOCAL_FALLBACK_IMAGES[i % LOCAL_FALLBACK_IMAGES.length])}
+                      />
                       <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <button className="px-4 py-2 bg-white rounded-full text-[10px] font-bold uppercase tracking-widest">Сохранить</button>
                       </div>

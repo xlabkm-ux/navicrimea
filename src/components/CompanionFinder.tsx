@@ -135,7 +135,7 @@ const MOCK_COMPANIONS: CompanionProfile[] = [
     endDate: '2026-03-17',
     companionshipType: 'companion',
     preferredGender: 'female',
-    photo: 'https://picsum.photos/seed/elena/400/600',
+    photo: '/images/hero-coast-1.svg',
     description: 'Ищу попутчицу для спокойного отдыха и посещения музеев.',
     likes: 15
   },
@@ -154,7 +154,7 @@ const MOCK_COMPANIONS: CompanionProfile[] = [
     endDate: '2026-03-15',
     companionshipType: 'company',
     preferredGender: 'any',
-    photo: 'https://picsum.photos/seed/dmitry/400/600',
+    photo: '/images/hero-cliff-1.svg',
     description: 'Собираю компанию для активного похода в горы.',
     likes: 24
   },
@@ -173,7 +173,7 @@ const MOCK_COMPANIONS: CompanionProfile[] = [
     endDate: '2026-03-12',
     companionshipType: 'joint_rest',
     preferredGender: 'any',
-    photo: 'https://picsum.photos/seed/maria/400/600',
+    photo: '/images/hero-sea-night.svg',
     description: 'Люблю живую музыку и ночной город. Поехали вместе!',
     likes: 42
   }
@@ -195,7 +195,7 @@ export const CompanionFinder = ({ onClose, userProfile: initialProfile }: any) =
     companionshipType: 'companion',
     preferredGender: 'any',
     description: '',
-    photo: initialProfile?.photo || 'https://picsum.photos/seed/myprofile/400/600'
+    photo: initialProfile?.photo || '/images/hero-palace.svg'
   });
 
   const [matches, setMatches] = useState<CompanionProfile[]>([]);
