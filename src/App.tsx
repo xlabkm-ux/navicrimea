@@ -1157,9 +1157,27 @@ const loadGoogleMaps = (apiKey: string): Promise<any> => {
   return googleMapsPromise;
 };
 
+const fitYandexViewport = (map: any) => {
+  try {
+    map?.container?.fitToViewport?.();
+  } catch {
+    // Ignore viewport recalculation errors for detached maps.
+  }
+};
+
+const syncYandexViewport = (map: any) => {
+  if (!map || typeof window === 'undefined') return;
+  const run = () => fitYandexViewport(map);
+  run();
+  window.requestAnimationFrame(run);
+  window.setTimeout(run, 120);
+  window.setTimeout(run, 360);
+};
+
 const YandexHeroMap = () => {
   const mapRef = React.useRef<HTMLDivElement>(null);
   const mapInstanceRef = React.useRef<any>(null);
+  const resizeObserverRef = React.useRef<ResizeObserver | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -1175,6 +1193,12 @@ const YandexHeroMap = () => {
         searchControlProvider: 'yandex#search'
       });
       mapInstanceRef.current = map;
+      syncYandexViewport(map);
+      if (typeof ResizeObserver !== 'undefined' && mapRef.current) {
+        resizeObserverRef.current?.disconnect();
+        resizeObserverRef.current = new ResizeObserver(() => syncYandexViewport(map));
+        resizeObserverRef.current.observe(mapRef.current);
+      }
       setIsLoaded(true);
     }).catch(err => {
       if (!disposed) console.error("Failed to load Yandex Maps", err);
@@ -1182,6 +1206,8 @@ const YandexHeroMap = () => {
 
     return () => {
       disposed = true;
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
       if (mapInstanceRef.current) {
         try {
           mapInstanceRef.current.destroy();
@@ -1225,6 +1251,7 @@ const InteractiveMap = ({
   const googleInstance = React.useRef<any>(null);
   const yandexMarkers = React.useRef<Map<string, any>>(new Map());
   const googleMarkers = React.useRef<Map<string, any>>(new Map());
+  const yandexResizeObserver = React.useRef<ResizeObserver | null>(null);
   const providerSwitchTimeoutRef = React.useRef<number | null>(null);
   
   const [isYandexLoaded, setIsYandexLoaded] = useState(false);
@@ -1256,6 +1283,12 @@ const InteractiveMap = ({
         controls: ['zoomControl', 'typeSelector', 'fullscreenControl']
       });
       yandexInstance.current = map;
+      syncYandexViewport(map);
+      if (typeof ResizeObserver !== 'undefined' && yandexRef.current) {
+        yandexResizeObserver.current?.disconnect();
+        yandexResizeObserver.current = new ResizeObserver(() => syncYandexViewport(map));
+        yandexResizeObserver.current.observe(yandexRef.current);
+      }
       setIsYandexLoaded(true);
       setMapInitError(null);
     }).catch((error) => {
@@ -1298,11 +1331,18 @@ const InteractiveMap = ({
   }, [provider, activeProvider]);
 
   useEffect(() => {
+    if (activeProvider !== 'yandex' || !isYandexLoaded || !yandexInstance.current) return;
+    syncYandexViewport(yandexInstance.current);
+  }, [activeProvider, isYandexLoaded]);
+
+  useEffect(() => {
     return () => {
       if (providerSwitchTimeoutRef.current !== null) {
         window.clearTimeout(providerSwitchTimeoutRef.current);
         providerSwitchTimeoutRef.current = null;
       }
+      yandexResizeObserver.current?.disconnect();
+      yandexResizeObserver.current = null;
 
       yandexMarkers.current.clear();
       googleMarkers.current.forEach((marker: any) => {
@@ -5808,7 +5848,7 @@ export default function App() {
                       onSelectPOI={handleVisit}
                       provider={mapProvider}
                       isCached={isCached}
-                      onDownload={handleDownloadMap}
+                      onDownload={downloadForOffline}
                       tourismPlaces={visibleTourismPlaces}
                       selectedTourismPlace={selectedTourismPlace}
                       onSelectTourismPlace={(place: TourismPlace) => {

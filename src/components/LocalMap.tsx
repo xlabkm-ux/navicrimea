@@ -1,4 +1,5 @@
-import { MapContainer, Marker as LeafletMarker, Polyline as LeafletPolyline, Popup, TileLayer } from 'react-leaflet';
+import { useEffect } from 'react';
+import { MapContainer, Marker as LeafletMarker, Polyline as LeafletPolyline, Popup, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -23,7 +24,7 @@ interface LocalMapProps {
   routePoints: Array<{ lat: number; lng: number }>;
 }
 
-const markerIconByColor = new Map<string, L.DivIcon>();
+const markerIconByColor = new Map<string, ReturnType<typeof L.divIcon>>();
 
 const getCategoryIcon = (color: string) => {
   const key = color || '#3b82f6';
@@ -40,10 +41,38 @@ const getCategoryIcon = (color: string) => {
   return iconInstance;
 };
 
+function LeafletViewportSync() {
+  const map = useMap();
+
+  useEffect(() => {
+    const invalidate = () => map.invalidateSize({ pan: false, debounceMoveend: true });
+    invalidate();
+    window.requestAnimationFrame(invalidate);
+    const t1 = window.setTimeout(invalidate, 120);
+    const t2 = window.setTimeout(invalidate, 360);
+
+    const container = map.getContainer();
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => invalidate());
+      observer.observe(container);
+    }
+
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      observer?.disconnect();
+    };
+  }, [map]);
+
+  return null;
+}
+
 export function LocalMap({ objects, onSelect, routePoints }: LocalMapProps) {
   return (
     <div className="w-full h-full rounded-[40px] overflow-hidden">
       <MapContainer center={[44.9521, 34.1024]} zoom={8} style={{ height: '100%', width: '100%' }}>
+        <LeafletViewportSync />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
