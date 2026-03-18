@@ -71,6 +71,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Impression, VisitedPlace } from './types';
+import { ExternalVoiceAssistant } from './components/ExternalVoiceAssistant';
 
 const CompanionFinder = lazy(() =>
   import('./components/CompanionFinder').then((module) => ({ default: module.CompanionFinder })),
@@ -80,9 +81,6 @@ const AIVoiceRoutePlanner = lazy(() =>
 );
 const ImpressionsManager = lazy(() =>
   import('./components/ImpressionsManager').then((module) => ({ default: module.ImpressionsManager })),
-);
-const ExternalVoiceAssistant = lazy(() =>
-  import('./components/ExternalVoiceAssistant').then((module) => ({ default: module.ExternalVoiceAssistant })),
 );
 const SettingsPanel = lazy(() =>
   import('./components/SettingsPanel').then((module) => ({ default: module.SettingsPanel })),
@@ -257,7 +255,7 @@ const translations: Record<Language, any> = {
     stays: 'Жилье',
     routes: 'Маршруты',
     experiences: 'Впечатления',
-    findCompanion: 'Найти попутчика',
+    findCompanion: 'Попутчики',
     safety: 'Безопасность',
     cabinet: 'Кабинет',
     search: 'Поиск по названию или типу...',
@@ -490,7 +488,7 @@ const translations: Record<Language, any> = {
     heatMap: 'Тепловая карта',
     migrationControl: 'Миграционный контроль',
     aboutUs: 'О нас',
-    partnerProgram: 'Партнерская программа',
+    partnerProgram: 'Партнеры',
     manifestoTitle: 'МАНИФЕСТ ЭКОСИСТЕМЫ «НАВИГАТОР КРЫМ»',
     manifestoSubtitle: 'От хаоса «дикого» туризма к цифровому государству будущего',
     manifestoText: `1. Наша Миссия
@@ -4412,7 +4410,7 @@ export default function App() {
           <motion.div 
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-purple-900 overflow-hidden"
+            className="fixed inset-0 z-[100] bg-[#130a26] overflow-hidden"
           >
             <div className="grid grid-cols-3 grid-rows-2 h-full w-full">
               {heroImages.map((img, i) => (
@@ -4433,21 +4431,65 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <motion.div 
-                initial={{ y: 20, opacity: 0 }}
+            <div className="absolute inset-0 bg-gradient-to-br from-[#120722]/80 via-[#1D1034]/70 to-[#2E1A52]/75" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(255,214,118,0.22),transparent_42%),radial-gradient(circle_at_82%_84%,rgba(128,83,255,0.34),transparent_38%)]" />
+            <div className="absolute inset-0 flex items-center justify-center px-4 sm:px-6 pointer-events-none">
+              <motion.div
+                initial={{ y: 22, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.5 }}
-                className="bg-white/10 backdrop-blur-xl p-12 rounded-[40px] border border-white/20 flex flex-col items-center pointer-events-auto"
+                transition={{ delay: 0.25, duration: 0.6 }}
+                className="relative w-full max-w-4xl rounded-[36px] border border-white/20 bg-white/12 backdrop-blur-2xl shadow-[0_24px_90px_rgba(12,7,25,0.55)] p-6 sm:p-8 lg:p-10 pointer-events-auto"
               >
-                <h1 className="text-white text-7xl font-serif mb-4 tracking-tighter uppercase">Нави<span className="italic font-light">Крым</span></h1>
-                <p className="text-white/70 text-lg mb-8 tracking-widest uppercase font-light">Исследуй лучшее</p>
-                <button 
-                  onClick={() => setShowHero(false)}
-                  className="px-12 py-4 bg-accent-purple text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-accent-purple/90 active:scale-95 transition-all shadow-2xl shadow-accent-purple/20"
-                >
-                  Начать путешествие
-                </button>
+                <div className="absolute -top-16 -right-10 w-44 h-44 bg-amber-300/25 rounded-full blur-3xl" />
+                <div className="absolute -bottom-20 -left-12 w-52 h-52 bg-violet-500/30 rounded-full blur-3xl" />
+
+                <div className="relative flex flex-col gap-8">
+                  <div className="flex items-center gap-4 sm:gap-5">
+                    <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/90 p-2 shadow-xl">
+                      <img
+                        src="/android-chrome-192x192.png"
+                        alt="Герб Крыма"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.32em] text-white/65 mb-2">
+                        Туристическая экосистема
+                      </p>
+                      <h1 className="text-white text-3xl sm:text-5xl lg:text-6xl font-serif leading-[0.95] tracking-tight">
+                        Навигатор Крыма
+                      </h1>
+                    </div>
+                  </div>
+
+                  <p className="text-white/80 text-sm sm:text-base lg:text-lg uppercase tracking-[0.24em] font-light">
+                    Исследуй лучшее
+                  </p>
+
+                  <div className="flex flex-wrap gap-2.5 sm:gap-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest">
+                    <span className="px-3 py-1.5 rounded-full bg-white/12 border border-white/20 text-white/85">Море и горы</span>
+                    <span className="px-3 py-1.5 rounded-full bg-white/12 border border-white/20 text-white/85">Жилье и маршруты</span>
+                    <span className="px-3 py-1.5 rounded-full bg-white/12 border border-white/20 text-white/85">Алиса и рекомендации</span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                    <button
+                      onClick={() => setShowHero(false)}
+                      className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#7A12FF] to-[#4A2DFF] text-white rounded-2xl font-bold uppercase tracking-[0.2em] text-xs hover:brightness-110 active:scale-[0.99] transition-all shadow-2xl shadow-violet-700/35"
+                    >
+                      Начать путешествие
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowHero(false);
+                        setShowPresentation(true);
+                      }}
+                      className="w-full sm:w-auto px-8 py-4 rounded-2xl border border-white/35 bg-white/10 text-white font-bold uppercase tracking-[0.2em] text-xs hover:bg-white/18 transition-colors"
+                    >
+                      Концепция проекта
+                    </button>
+                  </div>
+                </div>
               </motion.div>
             </div>
           </motion.div>
@@ -4936,9 +4978,10 @@ export default function App() {
             </div>
             <button 
               onClick={() => setSearchQuery(searchDestination)}
-              className="bg-blue-600 text-white px-10 py-3 font-bold uppercase tracking-widest text-[11px] hover:bg-blue-700 transition-colors"
+              className="bg-blue-600 text-white px-10 py-3 font-bold uppercase tracking-widest text-[11px] hover:bg-blue-700 transition-colors inline-flex items-center justify-center gap-2"
             >
-              Найти
+              <Calendar size={14} />
+              Забронировать
             </button>
           </div>
         </div>
@@ -5041,20 +5084,22 @@ export default function App() {
                   <Globe size={14} />
                   <span>Язык ({languages.find(l => l.code === lang)?.native})</span>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {languages.map((l) => (
-                    <button
-                      key={l.code}
-                      onClick={() => {
-                        setLang(l.code);
-                        setLangMenuOpen(false);
-                        setShowSettingsMenu(false);
-                      }}
-                      className={`px-2 py-2 rounded-xl text-left text-[10px] font-bold uppercase transition-colors border ${lang === l.code ? 'bg-accent-purple/10 text-accent-purple border-accent-purple/20' : 'hover:bg-black/5 text-black/60 border-black/5'}`}
-                    >
-                      {l.native}
-                    </button>
-                  ))}
+                <div>
+                  <label htmlFor="settings-language-select" className="sr-only">
+                    Выбор языка
+                  </label>
+                  <select
+                    id="settings-language-select"
+                    value={lang}
+                    onChange={(event) => setLang(event.target.value)}
+                    className="w-full px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide border border-black/10 bg-white text-black/70 focus:outline-none focus:ring-2 focus:ring-accent-purple/40 focus:border-accent-purple/30"
+                  >
+                    {languages.map((l) => (
+                      <option key={l.code} value={l.code}>
+                        {l.native}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <button
@@ -5199,7 +5244,6 @@ export default function App() {
                 </div>
                 
                 <div className="pt-8 border-t border-black/5">
-                  <h3 className="text-2xl font-serif mb-6">Доступные варианты</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredObjects.map(obj => (
                       <motion.div 

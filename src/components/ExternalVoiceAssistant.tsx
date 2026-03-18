@@ -482,7 +482,7 @@ export const ExternalVoiceAssistant: React.FC<ExternalVoiceAssistantProps> = ({
               {isProcessing ? (
                 <div className="flex flex-col items-center gap-3 py-10 opacity-70">
                   <Loader2 className="animate-spin text-accent-purple" size={32} />
-                  <p className="text-xs font-medium uppercase tracking-widest opacity-40">Анализирую...</p>
+                  <p className="text-xs font-medium uppercase tracking-widest opacity-40">Подбираю варианты...</p>
                 </div>
               ) : (
                 <div className="space-y-4 py-4">
