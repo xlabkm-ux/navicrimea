@@ -1462,6 +1462,7 @@ export default function App() {
   const [showAboutUs, setShowAboutUs] = useState(false);
   const [showPartnerMenu, setShowPartnerMenu] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showMobileBookingSheet, setShowMobileBookingSheet] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantResults, setAssistantResults] = useState<{
     query: string;
@@ -1654,6 +1655,7 @@ export default function App() {
     setShowCompanionFinder(false);
     setShowPartnerMenu(false);
     setShowSettingsMenu(false);
+    setShowMobileBookingSheet(false);
     setLangMenuOpen(false);
     setViewMode('grid');
     setSearchQuery('');
@@ -1676,12 +1678,23 @@ export default function App() {
 
   const openRegionsCatalog = () => {
     setShowHero(false);
+    setShowMobileBookingSheet(false);
     setSelectedRegion(null);
     setCatalogRegionId(null);
     setSelectedObject(null);
     setSelectedPOI(null);
     setViewMode('grid');
   };
+
+  const applyMobileBookingSearch = () => {
+    setShowHero(false);
+    setShowMobileBookingSheet(false);
+    setShowDestinationPicker(false);
+    setShowDatePicker(false);
+    setSearchGuests(searchGuests.trim() || '2 взрослых · 0 детей · 1 номер');
+    setSearchQuery(searchDestination.trim());
+  };
+
   const calculateNights = (start: Date | null, end: Date | null) => {
     if (!start || !end) return 0;
     const diffTime = Math.abs(end.getTime() - start.getTime());
@@ -4909,7 +4922,7 @@ export default function App() {
         </div>
 
         {/* Booking-style Search Bar */}
-        <div className="riviera-booking-row flex items-center gap-3 pb-1 overflow-x-auto">
+        <div className="riviera-booking-row hidden md:flex items-center gap-3 pb-1 overflow-x-auto">
           <button
             onClick={toggleAssistantPanel}
             className="riviera-icon-btn w-16 h-14 shrink-0 rounded-2xl flex items-center justify-center bg-accent-purple text-white shadow-2xl shadow-accent-purple/30 border border-accent-purple/20 transition-all hover:scale-[1.02]"
@@ -5118,7 +5131,101 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <main className="pt-36 lg:pt-32 min-h-screen bg-white/90 flex flex-col md:flex-row">
+      <AnimatePresence>
+        {showMobileBookingSheet && (
+          <div className="fixed inset-0 z-[206] md:hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setShowMobileBookingSheet(false);
+                setShowDestinationPicker(false);
+                setShowDatePicker(false);
+              }}
+              className="absolute inset-0 bg-black/45 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 26, stiffness: 260 }}
+              className="riviera-mobile-sheet absolute inset-x-0 bottom-0 rounded-t-[28px] border-t border-white/30 px-4 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl"
+            >
+              <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-black/15" />
+              <div className="mb-4">
+                <p className="text-[10px] uppercase tracking-[0.24em] font-bold opacity-45 mb-1">Быстрое бронирование</p>
+                <h3 className="text-2xl font-serif leading-none">Подберите жилье в Крыму</h3>
+              </div>
+
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-black/10 bg-white/85 p-3">
+                  <div className="flex items-center gap-2 mb-2 text-[10px] font-bold uppercase tracking-widest opacity-50">
+                    <MapPin size={12} />
+                    Куда едем
+                  </div>
+                  <input
+                    type="text"
+                    value={searchDestination}
+                    onChange={(e) => setSearchDestination(e.target.value)}
+                    onFocus={() => setShowDestinationPicker(true)}
+                    placeholder="Ялта, Алушта, Судак..."
+                    className="w-full bg-transparent text-sm font-semibold placeholder:text-black/35 focus:outline-none"
+                  />
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {['Ялта', 'Алушта', 'Судак'].map((city) => (
+                      <button
+                        key={city}
+                        onClick={() => setSearchDestination(city)}
+                        className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-[#EAF5F8] text-[#0E6D87] border border-[#0E6D87]/15"
+                      >
+                        {city}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setShowDatePicker(true)}
+                    className="text-left rounded-2xl border border-black/10 bg-white/85 p-3"
+                  >
+                    <div className="flex items-center gap-2 mb-2 text-[10px] font-bold uppercase tracking-widest opacity-50">
+                      <Calendar size={12} />
+                      Даты
+                    </div>
+                    <div className="text-xs font-bold leading-tight">
+                      {startDate && endDate ? `${formatDate(startDate)} — ${formatDate(endDate)}` : 'Выберите даты'}
+                    </div>
+                  </button>
+
+                  <div className="rounded-2xl border border-black/10 bg-white/85 p-3">
+                    <div className="flex items-center gap-2 mb-2 text-[10px] font-bold uppercase tracking-widest opacity-50">
+                      <Users size={12} />
+                      Гости
+                    </div>
+                    <input
+                      type="text"
+                      value={searchGuests}
+                      onChange={(e) => setSearchGuests(e.target.value)}
+                      className="w-full bg-transparent text-xs font-bold focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={applyMobileBookingSearch}
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#FF735C] to-[#E85E49] text-white text-xs font-bold uppercase tracking-[0.2em] shadow-xl shadow-[#E85E49]/30"
+                >
+                  Забронировать
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <main className="pt-36 lg:pt-32 pb-28 md:pb-0 min-h-screen bg-white/90 flex flex-col md:flex-row">
         {/* Impressions Sidebar */}
         <AnimatePresence>
           {showImpressions && (
@@ -5557,8 +5664,85 @@ export default function App() {
 
       </main>
 
+      {!showHero &&
+        !showPresentation &&
+        !showCompanionFinder &&
+        !showImpressions &&
+        !showRoutePlanner &&
+        !showCabinet &&
+        !showAboutUs &&
+        !showPartnerMenu &&
+        !showSettingsMenu &&
+        !showConfirmModal &&
+        !showPhotoGallery &&
+        !showMobileBookingSheet && (
+          <div className="riviera-mobile-tabs md:hidden fixed inset-x-0 bottom-0 z-[120] px-3 pb-[calc(0.55rem+env(safe-area-inset-bottom))]">
+            <div className="rounded-2xl border border-white/40 bg-white/90 backdrop-blur-xl shadow-[0_14px_36px_rgba(12,58,72,0.2)] px-2 py-1.5 grid grid-cols-5 gap-1">
+              <button
+                onClick={() => {
+                  openRegionsCatalog();
+                  setShowMobileBookingSheet(false);
+                }}
+                className={`riviera-tab-btn ${viewMode === 'grid' && !selectedRegion ? 'is-active' : ''}`}
+              >
+                <Layers size={16} />
+                <span>Регионы</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowHero(false);
+                  setShowMobileBookingSheet(true);
+                  setShowRoutePlanner(false);
+                  setShowImpressions(false);
+                  setShowCompanionFinder(false);
+                }}
+                className="riviera-tab-btn"
+              >
+                <Calendar size={16} />
+                <span>Бронь</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowHero(false);
+                  setShowRoutePlanner(true);
+                  setShowImpressions(false);
+                  setShowCompanionFinder(false);
+                }}
+                className={`riviera-tab-btn ${showRoutePlanner ? 'is-active' : ''}`}
+              >
+                <MapIcon size={16} />
+                <span>Карта</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowHero(false);
+                  toggleAssistantPanel();
+                }}
+                className={`riviera-tab-btn ${assistantOpen ? 'is-active' : ''}`}
+              >
+                <Sparkles size={16} />
+                <span>Алиса</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowSettingsMenu(true);
+                  setShowPartnerMenu(false);
+                }}
+                className="riviera-tab-btn"
+              >
+                <User size={16} />
+                <span>Профиль</span>
+              </button>
+            </div>
+          </div>
+        )}
+
       {/* Footer / Status Bar */}
-      <footer className="bg-white border-t border-black/5 px-4 md:px-6 py-3 flex flex-col gap-2 md:h-8 md:flex-row md:items-center md:justify-between text-[10px] font-medium uppercase tracking-widest opacity-40">
+      <footer className="bg-white border-t border-black/5 px-4 md:px-6 py-3 mb-24 md:mb-0 flex flex-col gap-2 md:h-8 md:flex-row md:items-center md:justify-between text-[10px] font-medium uppercase tracking-widest opacity-40">
         <div className="flex gap-4 items-center">
           {isOffline ? (
             <div className="flex items-center gap-1 text-red-500 font-bold">
