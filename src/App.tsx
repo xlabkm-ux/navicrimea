@@ -1159,21 +1159,38 @@ const loadGoogleMaps = (apiKey: string): Promise<any> => {
 
 const YandexHeroMap = () => {
   const mapRef = React.useRef<HTMLDivElement>(null);
+  const mapInstanceRef = React.useRef<any>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
+    let disposed = false;
     const apiKey = (import.meta as any).env.VITE_YANDEX_MAPS_API_KEY || '';
     loadYandexMaps(apiKey).then((ymaps) => {
-      if (!mapRef.current) return;
-      new ymaps.Map(mapRef.current, {
+      if (disposed || !mapRef.current || mapInstanceRef.current) return;
+      const map = new ymaps.Map(mapRef.current, {
         center: [44.9521, 34.1024], // Crimea center
         zoom: 8,
         controls: []
       }, {
         searchControlProvider: 'yandex#search'
       });
+      mapInstanceRef.current = map;
       setIsLoaded(true);
-    }).catch(err => console.error("Failed to load Yandex Maps", err));
+    }).catch(err => {
+      if (!disposed) console.error("Failed to load Yandex Maps", err);
+    });
+
+    return () => {
+      disposed = true;
+      if (mapInstanceRef.current) {
+        try {
+          mapInstanceRef.current.destroy();
+        } catch {
+          // ignore cleanup errors
+        }
+        mapInstanceRef.current = null;
+      }
+    };
   }, []);
 
   return (
@@ -1208,6 +1225,7 @@ const InteractiveMap = ({
   const googleInstance = React.useRef<any>(null);
   const yandexMarkers = React.useRef<Map<string, any>>(new Map());
   const googleMarkers = React.useRef<Map<string, any>>(new Map());
+  const providerSwitchTimeoutRef = React.useRef<number | null>(null);
   
   const [isYandexLoaded, setIsYandexLoaded] = useState(false);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
@@ -1220,6 +1238,7 @@ const InteractiveMap = ({
 
   // Initialize Yandex Map
   useEffect(() => {
+    let disposed = false;
     if (!yandexRef.current || !navigator.onLine || yandexInstance.current) return;
     
     const apiKey = (import.meta as any).env.VITE_YANDEX_MAPS_API_KEY || '';
@@ -1230,7 +1249,7 @@ const InteractiveMap = ({
     }
 
     loadYandexMaps(apiKey).then((ymaps) => {
-      if (!yandexRef.current) return;
+      if (disposed || !yandexRef.current || yandexInstance.current) return;
       const map = new ymaps.Map(yandexRef.current, {
         center: [44.9521, 34.1024],
         zoom: 8,
@@ -1240,10 +1259,15 @@ const InteractiveMap = ({
       setIsYandexLoaded(true);
       setMapInitError(null);
     }).catch((error) => {
+      if (disposed) return;
       console.error('Failed to initialize Yandex Map', error);
       setMapInitError('Не удалось загрузить Яндекс.Карту. Используется резервный режим.');
       setActiveProvider('local');
     });
+
+    return () => {
+      disposed = true;
+    };
   }, []);
 
   // Google Maps support intentionally disabled for this deployment.
@@ -1255,12 +1279,48 @@ const InteractiveMap = ({
   useEffect(() => {
     if (provider !== activeProvider) {
       setIsTransitioning(true);
-      setTimeout(() => {
+      if (providerSwitchTimeoutRef.current !== null) {
+        window.clearTimeout(providerSwitchTimeoutRef.current);
+      }
+      providerSwitchTimeoutRef.current = window.setTimeout(() => {
         setActiveProvider(provider);
         setIsTransitioning(false);
+        providerSwitchTimeoutRef.current = null;
       }, 300);
     }
+
+    return () => {
+      if (providerSwitchTimeoutRef.current !== null) {
+        window.clearTimeout(providerSwitchTimeoutRef.current);
+        providerSwitchTimeoutRef.current = null;
+      }
+    };
   }, [provider, activeProvider]);
+
+  useEffect(() => {
+    return () => {
+      if (providerSwitchTimeoutRef.current !== null) {
+        window.clearTimeout(providerSwitchTimeoutRef.current);
+        providerSwitchTimeoutRef.current = null;
+      }
+
+      yandexMarkers.current.clear();
+      googleMarkers.current.forEach((marker: any) => {
+        if (typeof marker?.setMap === 'function') marker.setMap(null);
+      });
+      googleMarkers.current.clear();
+
+      if (yandexInstance.current && typeof yandexInstance.current.destroy === 'function') {
+        try {
+          yandexInstance.current.destroy();
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+      yandexInstance.current = null;
+      googleInstance.current = null;
+    };
+  }, []);
 
   // Update Yandex Content
   useEffect(() => {
