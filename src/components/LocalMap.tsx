@@ -18,10 +18,27 @@ if (!defaultIconConfigured) {
 }
 
 interface LocalMapProps {
-  objects: Array<{ id: number; lat: number; lng: number; name: string; type: string }>;
+  objects: Array<{ id: number; lat: number; lng: number; name: string; type: string; markerColor?: string }>;
   onSelect: (object: any) => void;
   routePoints: Array<{ lat: number; lng: number }>;
 }
+
+const markerIconByColor = new Map<string, L.DivIcon>();
+
+const getCategoryIcon = (color: string) => {
+  const key = color || '#3b82f6';
+  const cached = markerIconByColor.get(key);
+  if (cached) return cached;
+
+  const iconInstance = L.divIcon({
+    className: '',
+    html: `<div style="width:16px;height:16px;border-radius:9999px;background:${key};border:2px solid #ffffff;box-shadow:0 1px 6px rgba(0,0,0,.35);"></div>`,
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+  });
+  markerIconByColor.set(key, iconInstance);
+  return iconInstance;
+};
 
 export function LocalMap({ objects, onSelect, routePoints }: LocalMapProps) {
   return (
@@ -35,6 +52,7 @@ export function LocalMap({ objects, onSelect, routePoints }: LocalMapProps) {
           <LeafletMarker
             key={obj.id}
             position={[obj.lat, obj.lng]}
+            icon={obj.markerColor ? getCategoryIcon(obj.markerColor) : undefined}
             eventHandlers={{
               click: () => onSelect(obj),
             }}

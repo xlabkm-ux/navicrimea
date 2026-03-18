@@ -68,7 +68,18 @@ import {
   Info,
   Handshake,
   Briefcase,
+  Bed,
+  ShoppingBasket,
+  Pill,
+  ShoppingBag,
+  Coffee,
+  Dumbbell,
+  Wrench,
+  Landmark,
+  Flag,
+  Scissors,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Impression, VisitedPlace } from './types';
 import { ExternalVoiceAssistant } from './components/ExternalVoiceAssistant';
@@ -222,18 +233,76 @@ interface POI {
   id: number;
   name: string;
   type: 'gas' | 'restaurant' | 'attraction';
+  address?: string;
   lat: number;
   lng: number;
 }
 
-const MOCK_POIS: POI[] = [
-  { id: 1, name: 'АЗС Атан', type: 'gas', lat: 44.95, lng: 34.11 },
-  { id: 2, name: 'Ресторан "Крым"', type: 'restaurant', lat: 44.51, lng: 33.52 },
-  { id: 3, name: 'Ласточкино гнездо', type: 'attraction', lat: 44.43, lng: 34.12 },
-  { id: 4, name: 'АЗС ТЭС', type: 'gas', lat: 44.72, lng: 34.51 },
-  { id: 5, name: 'Кафе "У моря"', type: 'restaurant', lat: 44.61, lng: 33.85 },
-  { id: 6, name: 'Воронцовский дворец', type: 'attraction', lat: 44.41, lng: 34.05 },
+interface TourismPlace {
+  id: string;
+  name: string;
+  address: string;
+  category: string;
+  lat: number;
+  lng: number;
+  source: 'yandex' | 'local';
+  categoryId?: string;
+  markerColor?: string;
+  url?: string;
+  phones?: string;
+  hours?: string;
+}
+
+interface TourismCategoryOption {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  queryText: string;
+  keywords: string[];
+  color: string;
+}
+
+const TOURISM_FILTERS_STORAGE_KEY = 'navicrimea-tourism-filters';
+const TOURISM_CATEGORY_OPTIONS: TourismCategoryOption[] = [
+  { id: 'food', label: 'Где поесть', icon: Utensils, queryText: 'рестораны кафе столовые', keywords: ['ресторан', 'кафе', 'столов', 'еда', 'food'], color: '#d7924c' },
+  { id: 'hotels', label: 'Отели', icon: Bed, queryText: 'отели гостиницы апартаменты', keywords: ['отел', 'гостин', 'апартамент', 'hotel', 'hostel'], color: '#8a6ad9' },
+  { id: 'markets', label: 'Продукты', icon: ShoppingBasket, queryText: 'продукты супермаркеты магазины', keywords: ['продукт', 'супермаркет', 'магазин', 'market'], color: '#6f94e0' },
+  { id: 'pharmacy', label: 'Аптеки', icon: Pill, queryText: 'аптеки', keywords: ['аптек', 'pharmacy', 'drugstore'], color: '#8eb955' },
+  { id: 'malls', label: 'Торговые центры', icon: ShoppingBag, queryText: 'торговые центры', keywords: ['торгов', 'тц', 'mall', 'shopping'], color: '#7796de' },
+  { id: 'coffee', label: 'Кафе', icon: Coffee, queryText: 'кофейни кафе', keywords: ['кофе', 'кофейн', 'cafe', 'coffee'], color: '#6f94e0' },
+  { id: 'atm', label: 'Банкоматы', icon: CreditCard, queryText: 'банкоматы банки', keywords: ['банкомат', 'банк', 'atm', 'bank'], color: '#8f72dd' },
+  { id: 'gas', label: 'АЗС', icon: Fuel, queryText: 'азс заправки', keywords: ['азс', 'заправ', 'gas station', 'fuel'], color: '#8a6ad9' },
+  { id: 'autoservice', label: 'Автосервисы', icon: Wrench, queryText: 'автосервисы шиномонтаж', keywords: ['автосервис', 'сто', 'шиномонтаж', 'service'], color: '#8a6ad9' },
+  { id: 'sport', label: 'Спорт', icon: Dumbbell, queryText: 'спортзалы фитнес', keywords: ['спорт', 'фитнес', 'gym', 'fitness'], color: '#8a6ad9' },
+  { id: 'gos', label: 'Госуслуги', icon: Flag, queryText: 'госуслуги мфц госучреждения', keywords: ['госуслуг', 'мфц', 'администрац', 'услуг'], color: '#9ca3af' },
+  { id: 'hospital', label: 'Больницы', icon: Plus, queryText: 'больницы клиники медцентры', keywords: ['больниц', 'клиник', 'мед', 'hospital', 'clinic'], color: '#cc7bab' },
+  { id: 'beauty', label: 'Салоны красоты', icon: Scissors, queryText: 'салоны красоты парикмахерские', keywords: ['салон', 'красот', 'парикмахер', 'barber', 'beauty'], color: '#cc7bab' },
+  { id: 'museum', label: 'Музеи', icon: Landmark, queryText: 'музеи выставки галереи', keywords: ['музей', 'выстав', 'галере', 'museum'], color: '#79ae9a' },
+  { id: 'fastfood', label: 'Быстрое питание', icon: ShoppingBag, queryText: 'быстрое питание фастфуд', keywords: ['фастфуд', 'бургер', 'пицц', 'быстр', 'fast food'], color: '#cc7bab' },
 ];
+
+const buildTourismCategoryLabelQuery = (categoryIds: string[]) =>
+  TOURISM_CATEGORY_OPTIONS.filter((item) => categoryIds.includes(item.id))
+    .map((item) => item.label)
+    .join(', ');
+
+const normalizeTourismText = (value: string) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const getTourismCategoryOptionForPlace = (place: TourismPlace) => {
+  const haystack = normalizeTourismText(`${place.name} ${place.category} ${place.address}`);
+  for (const option of TOURISM_CATEGORY_OPTIONS) {
+    if (option.keywords.some((keyword) => haystack.includes(normalizeTourismText(keyword)))) {
+      return option;
+    }
+  }
+  return null;
+};
 
 type Language = 'ru' | 'en' | 'zh' | 'hi' | 'es' | 'fr' | 'ar' | 'bn' | 'pt' | 'ja';
 
@@ -1119,7 +1188,20 @@ const YandexHeroMap = () => {
   );
 };
 
-const InteractiveMap = ({ objects, selectedObject, onSelect, routePoints, nearbyPois, onSelectPOI, provider = 'local', isCached, onDownload }: any) => {
+const InteractiveMap = ({
+  objects,
+  selectedObject,
+  onSelect,
+  routePoints,
+  nearbyPois,
+  onSelectPOI,
+  provider = 'local',
+  isCached,
+  onDownload,
+  tourismPlaces = [],
+  selectedTourismPlace = null,
+  onSelectTourismPlace = () => {},
+}: any) => {
   const yandexRef = React.useRef<HTMLDivElement>(null);
   const googleRef = React.useRef<HTMLDivElement>(null);
   const yandexInstance = React.useRef<any>(null);
@@ -1129,6 +1211,7 @@ const InteractiveMap = ({ objects, selectedObject, onSelect, routePoints, nearby
   
   const [isYandexLoaded, setIsYandexLoaded] = useState(false);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
+  const [mapInitError, setMapInitError] = useState<string | null>(null);
   
   // Default to local if no internet or no keys
   const initialProvider = (!navigator.onLine || provider === 'local') ? 'local' : provider;
@@ -1140,6 +1223,12 @@ const InteractiveMap = ({ objects, selectedObject, onSelect, routePoints, nearby
     if (!yandexRef.current || !navigator.onLine || yandexInstance.current) return;
     
     const apiKey = (import.meta as any).env.VITE_YANDEX_MAPS_API_KEY || '';
+    if (!apiKey) {
+      setMapInitError('Yandex Maps API key не указан. Используется резервный режим.');
+      setActiveProvider('local');
+      return;
+    }
+
     loadYandexMaps(apiKey).then((ymaps) => {
       if (!yandexRef.current) return;
       const map = new ymaps.Map(yandexRef.current, {
@@ -1149,6 +1238,11 @@ const InteractiveMap = ({ objects, selectedObject, onSelect, routePoints, nearby
       });
       yandexInstance.current = map;
       setIsYandexLoaded(true);
+      setMapInitError(null);
+    }).catch((error) => {
+      console.error('Failed to initialize Yandex Map', error);
+      setMapInitError('Не удалось загрузить Яндекс.Карту. Используется резервный режим.');
+      setActiveProvider('local');
     });
   }, []);
 
@@ -1176,6 +1270,7 @@ const InteractiveMap = ({ objects, selectedObject, onSelect, routePoints, nearby
     yandexMarkers.current.clear();
 
     objects.forEach((obj: any) => {
+      if (obj?.isTourismSynthetic) return;
       const isSelected = selectedObject?.id === obj.id;
       const placemark = new (window as any).ymaps.Placemark([obj.lat, obj.lng], {
         balloonContent: `<strong>${obj.name}</strong><br/>${obj.type}`,
@@ -1210,7 +1305,28 @@ const InteractiveMap = ({ objects, selectedObject, onSelect, routePoints, nearby
       placemark.events.add('click', () => onSelectPOI(poi));
       map.geoObjects.add(placemark);
     });
-  }, [objects, routePoints, nearbyPois, isYandexLoaded, selectedObject]);
+
+    tourismPlaces.forEach((place: TourismPlace) => {
+      const isFocused = selectedTourismPlace && String(selectedTourismPlace.id) === String(place.id);
+      const markerColor = place.markerColor || '#6b7280';
+      const placemark = new (window as any).ymaps.Placemark([place.lat, place.lng], {
+        balloonContent: `
+          <div style="min-width:220px">
+            <strong>${place.name}</strong><br/>
+            <span>${place.address || 'Адрес не указан'}</span><br/>
+            <span style="opacity:.7">${place.category || 'Туристический объект'}</span>
+          </div>
+        `,
+        hintContent: place.name
+      }, {
+        preset: isFocused ? 'islands#circleIcon' : 'islands#dotIcon',
+        iconColor: markerColor,
+        zIndex: isFocused ? 900 : 100
+      });
+      placemark.events.add('click', () => onSelectTourismPlace(place));
+      map.geoObjects.add(placemark);
+    });
+  }, [objects, routePoints, nearbyPois, tourismPlaces, isYandexLoaded, selectedObject, selectedTourismPlace]);
 
   // Update Google Content
   useEffect(() => {
@@ -1283,8 +1399,16 @@ const InteractiveMap = ({ objects, selectedObject, onSelect, routePoints, nearby
         googleInstance.current.panTo({ lat: selectedObject.lat, lng: selectedObject.lng });
         googleInstance.current.setZoom(12);
       }
+      return;
     }
-  }, [selectedObject, activeProvider]);
+
+    if (selectedTourismPlace && activeProvider === 'yandex' && yandexInstance.current) {
+      yandexInstance.current.setCenter([selectedTourismPlace.lat, selectedTourismPlace.lng], 13, {
+        checkZoomRange: true,
+        duration: 500
+      });
+    }
+  }, [selectedObject, selectedTourismPlace, activeProvider]);
 
   const isOffline = !navigator.onLine;
   const isLoaded = activeProvider === 'local' ? true : (activeProvider === 'yandex' ? isYandexLoaded : isGoogleLoaded);
@@ -1355,6 +1479,12 @@ const InteractiveMap = ({ objects, selectedObject, onSelect, routePoints, nearby
         ref={googleRef} 
         className={`absolute inset-0 w-full h-full transition-opacity duration-500 ease-in-out ${activeProvider === 'google' ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
       />
+
+      {mapInitError && activeProvider === 'local' && (
+        <div className="absolute top-3 left-3 right-3 z-[80] rounded-xl border border-black/10 bg-white/90 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-black/60">
+          {mapInitError}
+        </div>
+      )}
     </div>
   );
 };
@@ -1454,14 +1584,16 @@ export default function App() {
   const [isPaid, setIsPaid] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
   const [userNotes, setUserNotes] = useState('');
+  const [allPois, setAllPois] = useState<POI[]>([]);
   const [nearbyPois, setNearbyPois] = useState<POI[]>([]);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [isCaching, setIsCaching] = useState(false);
-  const [isCached, setIsCached] = useState(!!localStorage.getItem('offline_objects'));
+  const [isCached, setIsCached] = useState(!!localStorage.getItem('offline_objects') && !!localStorage.getItem('offline_pois'));
   const [showCabinet, setShowCabinet] = useState(false);
   const [showAboutUs, setShowAboutUs] = useState(false);
   const [showPartnerMenu, setShowPartnerMenu] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showMobileTopMenu, setShowMobileTopMenu] = useState(false);
   const [showMobileBookingSheet, setShowMobileBookingSheet] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantResults, setAssistantResults] = useState<{
@@ -1485,7 +1617,23 @@ export default function App() {
   const [showLandlordForm, setShowLandlordForm] = useState(false);
   const [showProfileSaveSuccess, setShowProfileSaveSuccess] = useState(false);
   const [showRoutePlanner, setShowRoutePlanner] = useState(false);
+  const [showMapWindow, setShowMapWindow] = useState(false);
   const [showImpressions, setShowImpressions] = useState(false);
+  const [tourismQuery, setTourismQuery] = useState('отели и гостиницы');
+  const [tourismPlaces, setTourismPlaces] = useState<TourismPlace[]>([]);
+  const [selectedTourismPlace, setSelectedTourismPlace] = useState<TourismPlace | null>(null);
+  const [isTourismLoading, setIsTourismLoading] = useState(false);
+  const [tourismError, setTourismError] = useState<string | null>(null);
+  const [showTourismCategoryPicker, setShowTourismCategoryPicker] = useState(false);
+  const [selectedTourismCategories, setSelectedTourismCategories] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(TOURISM_FILTERS_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
+    } catch {
+      return [];
+    }
+  });
   const [yandexPhotos, setYandexPhotos] = useState<string[]>([]);
   const [showPhotoGallery, setShowPhotoGallery] = useState(false);
   const [regionCoverById, setRegionCoverById] = useState<Record<string, string>>({});
@@ -1499,6 +1647,23 @@ export default function App() {
   }>({
     interests: []
   });
+  const tourismSearchPanelRef = React.useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(TOURISM_FILTERS_STORAGE_KEY, JSON.stringify(selectedTourismCategories));
+    } catch (error) {
+      console.warn('Failed to persist tourism filters', error);
+    }
+  }, [selectedTourismCategories]);
+
+  useEffect(() => {
+    if (!selectedTourismCategories.length) return;
+    const restoredQuery = buildTourismCategoryLabelQuery(selectedTourismCategories);
+    if (restoredQuery) {
+      setTourismQuery(restoredQuery);
+    }
+  }, []);
 
   const handleImageFallback = (event: React.SyntheticEvent<HTMLImageElement>, fallbackSrc: string) => {
     const image = event.currentTarget;
@@ -1651,10 +1816,12 @@ export default function App() {
     setSelectedObject(null);
     setSelectedPOI(null);
     setShowRoutePlanner(false);
+    setShowMapWindow(false);
     setShowImpressions(false);
     setShowCompanionFinder(false);
     setShowPartnerMenu(false);
     setShowSettingsMenu(false);
+    setShowMobileTopMenu(false);
     setShowMobileBookingSheet(false);
     setLangMenuOpen(false);
     setViewMode('grid');
@@ -1678,7 +1845,9 @@ export default function App() {
 
   const openRegionsCatalog = () => {
     setShowHero(false);
+    setShowMobileTopMenu(false);
     setShowMobileBookingSheet(false);
+    setShowMapWindow(false);
     setSelectedRegion(null);
     setCatalogRegionId(null);
     setSelectedObject(null);
@@ -2296,6 +2465,132 @@ export default function App() {
   };
 
   const t = translations[lang];
+  const visibleTourismPlaces = useMemo(
+    () =>
+      tourismPlaces.map((place) => {
+        const option = getTourismCategoryOptionForPlace(place);
+        return {
+          ...place,
+          categoryId: option?.id,
+          markerColor: option?.color || '#6b7280',
+        };
+      }),
+    [tourismPlaces],
+  );
+
+  const fetchTourismPlaces = async (queryOverride?: string, categoriesOverride?: string[]) => {
+    const categoryIds = categoriesOverride ?? selectedTourismCategories;
+    const defaultCategoryQuery = buildTourismCategoryLabelQuery(categoryIds);
+    const nextQuery = String(queryOverride ?? tourismQuery).trim() || defaultCategoryQuery || 'отели и гостиницы';
+    const effectiveQuery = nextQuery;
+    setTourismQuery(nextQuery);
+    setIsTourismLoading(true);
+    setTourismError(null);
+
+    try {
+      const params = new URLSearchParams({
+        q: effectiveQuery,
+        results: '60',
+      });
+      if (categoryIds.length) {
+        params.set('categories', categoryIds.join(','));
+      }
+      const response = await fetch(`/api/v1/tourism/places?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const payload = await response.json();
+      const places: TourismPlace[] = Array.isArray(payload?.places) ? payload.places : [];
+      const warningMessage =
+        typeof payload?.warning === 'string' && payload.warning.trim()
+          ? payload.warning.trim()
+          : '';
+      setTourismPlaces(places);
+      setSelectedTourismPlace((prev) => {
+        if (prev) {
+          const matched = places.find((item) => String(item.id) === String(prev.id));
+          if (matched) return matched;
+        }
+        return places[0] ?? null;
+      });
+
+      if (warningMessage) {
+        setTourismError(warningMessage);
+      } else if (!places.length) {
+        setTourismError('По запросу ничего не найдено. Попробуйте изменить формулировку.');
+      } else {
+        setTourismError(null);
+      }
+    } catch (error) {
+      console.error('Failed to load tourism places', error);
+      setTourismPlaces([]);
+      setSelectedTourismPlace(null);
+      setTourismError('Не удалось загрузить туристические объекты. Проверьте настройки ключа и сеть.');
+    } finally {
+      setIsTourismLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!showMapWindow) return;
+    fetchTourismPlaces(undefined, selectedTourismCategories);
+  }, [showMapWindow]);
+
+  useEffect(() => {
+    if (!showMapWindow) {
+      setShowTourismCategoryPicker(false);
+      return;
+    }
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!tourismSearchPanelRef.current) return;
+      if (tourismSearchPanelRef.current.contains(event.target as Node)) return;
+      setShowTourismCategoryPicker(false);
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [showMapWindow]);
+
+  useEffect(() => {
+    if (!selectedTourismPlace) return;
+    const exists = visibleTourismPlaces.some((item) => String(item.id) === String(selectedTourismPlace.id));
+    if (!exists) {
+      setSelectedTourismPlace(visibleTourismPlaces[0] ?? null);
+    }
+  }, [visibleTourismPlaces, selectedTourismPlace]);
+
+  const toggleTourismCategory = (categoryId: string) => {
+    setSelectedTourismCategories((prev) => {
+      const next = prev.includes(categoryId)
+        ? prev.filter((id) => id !== categoryId)
+        : [...prev, categoryId];
+      const nextQuery = buildTourismCategoryLabelQuery(next);
+      setTourismQuery(nextQuery);
+
+      if (showMapWindow) {
+        window.requestAnimationFrame(() => {
+          fetchTourismPlaces(nextQuery || 'отели и гостиницы', next);
+        });
+      }
+
+      return next;
+    });
+  };
+
+  const openCrimeaMapWindow = () => {
+    setShowHero(false);
+    setShowRoutePlanner(false);
+    setShowImpressions(false);
+    setShowCompanionFinder(false);
+    setShowMobileBookingSheet(false);
+    setSelectedObject(null);
+    setSelectedPOI(null);
+    setShowMapWindow(true);
+  };
 
   const calculateComplexRoute = () => {
     if (routePoints.length < 2) return { distance: 0, time: 0, cost: 0, sleepNights: 0, sortedPoints: [] };
@@ -2509,6 +2804,7 @@ export default function App() {
 
   useEffect(() => {
     fetchObjects();
+    fetchPois();
   }, []);
 
   useEffect(() => {
@@ -2523,14 +2819,14 @@ export default function App() {
     }
 
     // Simple 5km radius check from any point
-    const filtered = MOCK_POIS.filter(poi => {
+    const filtered = allPois.filter(poi => {
       return pointsToSearch.some(p => {
         const d = Math.sqrt(Math.pow(poi.lat - p.lat, 2) + Math.pow(poi.lng - p.lng, 2));
         return d < 0.045; // ~5km
       });
     });
     setNearbyPois(filtered);
-  }, [routePoints, selectedObject]);
+  }, [routePoints, selectedObject, allPois]);
 
   useEffect(() => {
     if (selectedObject) {
@@ -2582,7 +2878,7 @@ export default function App() {
     // Simulate downloading/caching process
     await new Promise(resolve => setTimeout(resolve, 2000));
     localStorage.setItem('offline_objects', JSON.stringify(objects));
-    localStorage.setItem('offline_pois', JSON.stringify(MOCK_POIS));
+    localStorage.setItem('offline_pois', JSON.stringify(allPois));
     setIsCached(true);
     setIsCaching(false);
   };
@@ -2609,6 +2905,29 @@ export default function App() {
       if (cached) setObjects(JSON.parse(cached));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPois = async () => {
+    if (!navigator.onLine) {
+      const cached = localStorage.getItem('offline_pois');
+      if (cached) {
+        setAllPois(JSON.parse(cached));
+        return;
+      }
+    }
+
+    try {
+      const res = await fetch('/api/v1/pois');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setAllPois(data);
+      }
+    } catch (err) {
+      console.error(err);
+      const cached = localStorage.getItem('offline_pois');
+      if (cached) setAllPois(JSON.parse(cached));
     }
   };
 
@@ -4856,7 +5175,7 @@ export default function App() {
               <span className="font-bold tracking-tight text-[1.5rem] md:text-[1.8rem] leading-none logo-gradient whitespace-nowrap">Навигатор Крым</span>
             </div>
           </div>
-          <div className="nav-menu riviera-menu flex items-center justify-center gap-1 2xl:gap-2.5 font-semibold text-black/88 flex-wrap flex-1 min-w-0">
+          <div className="nav-menu riviera-menu hidden md:flex items-center justify-center gap-1 2xl:gap-2.5 font-semibold text-black/88 flex-wrap flex-1 min-w-0">
             <button 
               onClick={openRegionsCatalog}
               className={`nav-menu-item compact flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${viewMode === 'grid' && !selectedRegion ? 'border-accent-purple text-accent-purple bg-accent-purple/5' : 'border-accent-purple/15 text-black/62 hover:text-black hover:bg-accent-purple/5'}`}
@@ -4921,6 +5240,93 @@ export default function App() {
           </div>
         </div>
 
+        <div className="md:hidden flex items-center gap-2 pb-1">
+          <button
+            onClick={openRegionsCatalog}
+            className="flex-1 min-h-11 rounded-xl border border-[#0E6D87]/25 bg-white/90 text-[#0E6D87] font-bold uppercase tracking-[0.14em] text-[10px] inline-flex items-center justify-center gap-2"
+          >
+            <Layers size={14} />
+            Регионы
+          </button>
+          <button
+            onClick={() => setShowMobileTopMenu((prev) => !prev)}
+            className="px-4 min-h-11 rounded-xl border border-black/10 bg-white/90 text-black/70 font-bold uppercase tracking-[0.14em] text-[10px] inline-flex items-center justify-center gap-2"
+          >
+            Меню
+            <ChevronDown size={12} className={`transition-transform ${showMobileTopMenu ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {showMobileTopMenu && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="md:hidden pb-1"
+            >
+              <div className="rounded-2xl border border-[#0E6D87]/20 bg-white/95 backdrop-blur-md shadow-[0_12px_28px_rgba(10,77,98,0.12)] p-2 grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    setShowRoutePlanner(true);
+                    setShowImpressions(false);
+                    setShowCompanionFinder(false);
+                    setShowMobileTopMenu(false);
+                  }}
+                  className="min-h-11 rounded-xl border border-[#0E6D87]/15 text-[#0E6D87] text-[10px] font-bold uppercase tracking-[0.13em] inline-flex items-center justify-center gap-2"
+                >
+                  <Route size={14} />
+                  {t.routes}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowImpressions(true);
+                    setShowRoutePlanner(false);
+                    setShowCompanionFinder(false);
+                    setShowMobileTopMenu(false);
+                  }}
+                  className="min-h-11 rounded-xl border border-[#0E6D87]/15 text-[#0E6D87] text-[10px] font-bold uppercase tracking-[0.13em] inline-flex items-center justify-center gap-2"
+                >
+                  <Sparkles size={14} />
+                  {t.experiences}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCompanionFinder(true);
+                    setShowMobileTopMenu(false);
+                  }}
+                  className="min-h-11 rounded-xl border border-[#0E6D87]/15 text-[#0E6D87] text-[10px] font-bold uppercase tracking-[0.13em] inline-flex items-center justify-center gap-2"
+                >
+                  <Users size={14} />
+                  {t.findCompanion}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPartnerMenu(true);
+                    setShowSettingsMenu(false);
+                    setShowMobileTopMenu(false);
+                  }}
+                  className="min-h-11 rounded-xl border border-[#0E6D87]/15 text-[#0E6D87] text-[10px] font-bold uppercase tracking-[0.13em] inline-flex items-center justify-center gap-2"
+                >
+                  <Handshake size={14} />
+                  {t.partnerProgram}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowSettingsMenu(true);
+                    setShowPartnerMenu(false);
+                    setShowMobileTopMenu(false);
+                  }}
+                  className="col-span-2 min-h-11 rounded-xl border border-black/10 text-black/70 text-[10px] font-bold uppercase tracking-[0.13em] inline-flex items-center justify-center gap-2"
+                >
+                  <User size={14} />
+                  Настройки
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Booking-style Search Bar */}
         <div className="riviera-booking-row hidden md:flex items-center gap-3 pb-1 overflow-x-auto">
           <button
@@ -4931,13 +5337,7 @@ export default function App() {
             <Sparkles size={26} />
           </button>
           <button
-            onClick={() =>
-              window.open(
-                'https://yandex.ru/maps/?ll=34.102417%2C45.317338&z=8',
-                '_blank',
-                'noopener,noreferrer'
-              )
-            }
+            onClick={openCrimeaMapWindow}
             className="riviera-icon-btn riviera-icon-btn--ghost w-16 h-14 shrink-0 rounded-2xl flex items-center justify-center bg-white text-accent-purple shadow-lg border border-accent-purple/20 transition-all hover:scale-[1.02]"
             title="Открыть Яндекс Карты (Крым)"
           >
@@ -4952,7 +5352,7 @@ export default function App() {
               <MapPin size={18} className="text-gray-400 mr-3" />
               <input 
                 type="text" 
-                placeholder="Куда вы хотите поехать?" 
+                      placeholder="ГДЕ ВЫ ХОТИТЕ ОТДОХНУТЬ?"
                 className="riviera-search-input w-full py-3 text-[11px] font-bold uppercase tracking-widest focus:outline-none placeholder:text-gray-400"
                 value={searchDestination}
                 onChange={(e) => {
@@ -5289,6 +5689,181 @@ export default function App() {
                     }}
                   />
                 </Suspense>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {showMapWindow && (
+            <div className="fixed inset-0 z-[96] overflow-y-auto p-2 md:p-4 lg:p-6">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowMapWindow(false)}
+                className="absolute inset-0 bg-black/45 backdrop-blur-sm"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 20 }}
+                className="relative w-full max-w-[1500px] min-h-[94vh] h-auto bg-white rounded-[28px] border border-black/10 shadow-2xl flex flex-col overflow-visible my-2 md:my-4 mx-auto"
+              >
+                <div className="px-4 md:px-6 py-4 border-b border-black/5 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg md:text-2xl font-serif">Карта туризма Крыма</h3>
+                    <p className="text-[10px] uppercase tracking-widest opacity-40">Отели и гостиницы на карте</p>
+                  </div>
+                  <button
+                    onClick={() => setShowMapWindow(false)}
+                    className="w-10 h-10 rounded-xl border border-black/10 hover:bg-black/5 flex items-center justify-center"
+                    aria-label="Закрыть карту"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] grid-rows-[minmax(320px,56vh)_auto] lg:grid-rows-1 gap-4 p-4 md:p-6 bg-[#efefef]">
+                  <div className="order-1 lg:order-1 min-h-0 rounded-2xl border border-black/15 overflow-hidden bg-white">
+                    <InteractiveMap
+                      objects={visibleTourismPlaces.map((place, index) => ({
+                        id: -(index + 1),
+                        name: place.name,
+                        type: place.category || 'Туризм',
+                        description: place.address || '',
+                        lat: place.lat,
+                        lng: place.lng,
+                        price_per_night: 0,
+                        image_url: '',
+                        markerColor: place.markerColor || '#6b7280',
+                        isTourismSynthetic: true,
+                      }))}
+                      selectedObject={selectedObject}
+                      onSelect={(obj: GeoObject) => {
+                        setSelectedTourismPlace(null);
+                        setSelectedObject(obj);
+                      }}
+                      routePoints={routePoints}
+                      nearbyPois={[]}
+                      onSelectPOI={handleVisit}
+                      provider={mapProvider}
+                      isCached={isCached}
+                      onDownload={handleDownloadMap}
+                      tourismPlaces={visibleTourismPlaces}
+                      selectedTourismPlace={selectedTourismPlace}
+                      onSelectTourismPlace={(place: TourismPlace) => {
+                        setSelectedObject(null);
+                        setSelectedTourismPlace(place);
+                      }}
+                    />
+                  </div>
+
+                  <div className="order-2 lg:order-2 relative rounded-2xl border border-black/15 bg-[#f6f6f6] flex flex-col">
+                    <div ref={tourismSearchPanelRef} className="relative p-4 border-b border-black/10">
+                      <div className="relative">
+                        <button
+                          onClick={() => {
+                            setShowTourismCategoryPicker(false);
+                            fetchTourismPlaces(undefined, selectedTourismCategories);
+                          }}
+                          disabled={isTourismLoading}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg border border-black/10 bg-white text-black/70 flex items-center justify-center disabled:opacity-50"
+                          aria-label="Найти"
+                          type="button"
+                        >
+                          <Search size={16} />
+                        </button>
+                        <input
+                          type="text"
+                          value={tourismQuery}
+                          onFocus={() => setShowTourismCategoryPicker(true)}
+                          onChange={(event) => setTourismQuery(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              setShowTourismCategoryPicker(false);
+                              fetchTourismPlaces(undefined, selectedTourismCategories);
+                            }
+                          }}
+                          placeholder="Поиск и выбор мест"
+                          className="w-full pl-12 pr-3 py-2.5 rounded-xl border border-black/15 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
+                        />
+                      </div>
+
+                      {showTourismCategoryPicker && (
+                        <div className="absolute left-3 right-3 top-[calc(100%+8px)] rounded-2xl border border-black/15 bg-[#f5f5f5] shadow-xl p-4 z-30">
+                          <div className="grid grid-cols-5 gap-3">
+                            {TOURISM_CATEGORY_OPTIONS.map((option) => {
+                              const Icon = option.icon;
+                              const active = selectedTourismCategories.includes(option.id);
+                              return (
+                                <button
+                                  key={option.id}
+                                  onClick={() => toggleTourismCategory(option.id)}
+                                  className="text-center"
+                                  type="button"
+                                >
+                                  <div
+                                    className={`mx-auto w-12 h-12 rounded-full border bg-white flex items-center justify-center transition-colors ${
+                                      active ? 'border-black/55 shadow-[0_0_0_4px_rgba(0,0,0,0.16)]' : 'border-black/15'
+                                    }`}
+                                    style={{ color: option.color }}
+                                  >
+                                    <Icon size={18} />
+                                  </div>
+                                  <div className={`mt-1.5 text-[11px] leading-tight ${active ? 'font-bold text-black' : 'text-black/75'}`}>
+                                    {option.label}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {tourismError && (
+                      <div className="px-4 py-2 text-[11px] text-black/70 bg-[#e9e9e9] border-b border-black/10">
+                        {tourismError}
+                      </div>
+                    )}
+
+                    <div className="px-4 py-2 border-b border-black/10 text-[10px] font-bold uppercase tracking-widest text-black/55">
+                      Найдено: {visibleTourismPlaces.length}
+                    </div>
+
+                    <div className="p-3 space-y-2 pb-6">
+                      {visibleTourismPlaces.map((place) => {
+                        const active = selectedTourismPlace && String(selectedTourismPlace.id) === String(place.id);
+                        return (
+                          <button
+                            key={place.id}
+                            onClick={() => {
+                              setSelectedObject(null);
+                              setSelectedTourismPlace(place);
+                            }}
+                            className={`w-full text-left p-3 rounded-xl border transition-colors ${
+                              active
+                                ? 'border-black bg-[#e8e8e8]'
+                                : 'border-black/15 bg-white hover:bg-[#f1f1f1]'
+                            }`}
+                          >
+                            <div className="text-sm font-bold leading-tight text-black/90">{place.name}</div>
+                            <div className="text-[11px] text-black/60 mt-1 leading-tight">{place.address || 'Адрес не указан'}</div>
+                            <div className="text-[9px] uppercase tracking-widest text-black/45 mt-2 flex items-center gap-1.5">
+                              <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: place.markerColor || '#6b7280' }} />
+                              {place.category || 'Туризм'}
+                            </div>
+                          </button>
+                        );
+                      })}
+                      {!isTourismLoading && visibleTourismPlaces.length === 0 && (
+                        <div className="py-10 text-center text-[10px] font-bold uppercase tracking-widest text-black/45">
+                          Нет результатов
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </motion.div>
             </div>
           )}
@@ -5673,6 +6248,7 @@ export default function App() {
         !showAboutUs &&
         !showPartnerMenu &&
         !showSettingsMenu &&
+        !showMapWindow &&
         !showConfirmModal &&
         !showPhotoGallery &&
         !showMobileBookingSheet && (
@@ -5706,11 +6282,13 @@ export default function App() {
               <button
                 onClick={() => {
                   setShowHero(false);
-                  setShowRoutePlanner(true);
+                  setShowRoutePlanner(false);
                   setShowImpressions(false);
                   setShowCompanionFinder(false);
+                  setShowMobileBookingSheet(false);
+                  openCrimeaMapWindow();
                 }}
-                className={`riviera-tab-btn ${showRoutePlanner ? 'is-active' : ''}`}
+                className="riviera-tab-btn"
               >
                 <MapIcon size={16} />
                 <span>Карта</span>

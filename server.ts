@@ -18,6 +18,7 @@ const resolvedDbPath = path.isAbsolute(configuredDbPath)
   ? configuredDbPath
   : path.join(process.cwd(), configuredDbPath);
 const db = new Database(resolvedDbPath);
+let hasLoggedTourism403 = false;
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadsDir),
   filename: (_req, file, cb) => cb(null, `${Date.now()}${path.extname(file.originalname)}`),
@@ -61,7 +62,104 @@ db.exec(`
     key TEXT PRIMARY KEY,
     value TEXT
   );
+  CREATE TABLE IF NOT EXISTS tourism_places (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    address TEXT,
+    category TEXT,
+    category_id TEXT,
+    lat REAL NOT NULL,
+    lng REAL NOT NULL,
+    source TEXT DEFAULT 'local'
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_tourism_places_name_coords
+    ON tourism_places(name, lat, lng);
 `);
+
+const ensureColumnExists = (tableName: string, columnName: string, definition: string) => {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+  const hasColumn = columns.some((column) => column.name === columnName);
+  if (!hasColumn) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
+};
+
+ensureColumnExists("objects", "address", "TEXT");
+
+const defaultTourismPlacesSeed = [
+  {
+    name: "Вилла Елена",
+    address: "Координаты: 44.4952, 34.1663 (Ялта)",
+    category: "Отель",
+    categoryId: "hotels",
+    lat: 44.4952,
+    lng: 34.1663,
+  },
+  {
+    name: "Эко-дом Мыс Фиолент",
+    address: "Координаты: 44.5007, 33.4833 (Севастополь, мыс Фиолент)",
+    category: "Гостевой дом",
+    categoryId: "hotels",
+    lat: 44.5007,
+    lng: 33.4833,
+  },
+  {
+    name: "Апартаменты с видом на Судакскую крепость",
+    address: "Координаты: 44.8436, 34.9581 (Судак)",
+    category: "Апартаменты",
+    categoryId: "hotels",
+    lat: 44.8436,
+    lng: 34.9581,
+  },
+  {
+    name: "АЗС Атан",
+    address: "Координаты: 44.9500, 34.1100",
+    category: "АЗС",
+    categoryId: "gas",
+    lat: 44.95,
+    lng: 34.11,
+  },
+  {
+    name: "Ресторан \"Крым\"",
+    address: "Координаты: 44.5100, 33.5200",
+    category: "Ресторан",
+    categoryId: "food",
+    lat: 44.51,
+    lng: 33.52,
+  },
+  {
+    name: "Ласточкино гнездо",
+    address: "пгт Гаспра, Алупкинское шоссе, 9А",
+    category: "Достопримечательность",
+    categoryId: "museum",
+    lat: 44.43,
+    lng: 34.12,
+  },
+  {
+    name: "АЗС ТЭС",
+    address: "Координаты: 44.7200, 34.5100",
+    category: "АЗС",
+    categoryId: "gas",
+    lat: 44.72,
+    lng: 34.51,
+  },
+  {
+    name: "Кафе \"У моря\"",
+    address: "Координаты: 44.6100, 33.8500",
+    category: "Кафе",
+    categoryId: "coffee",
+    lat: 44.61,
+    lng: 33.85,
+  },
+  {
+    name: "Воронцовский дворец",
+    address: "Алупка, Дворцовое шоссе, 18",
+    category: "Музей",
+    categoryId: "museum",
+    lat: 44.41,
+    lng: 34.05,
+  },
+];
 
 const discoveryContent = {
   routes: [
@@ -580,12 +678,33 @@ const objectCount = db.prepare("SELECT COUNT(*) as count FROM objects").get() as
 if (objectCount.count === 0) {
   const ownerId = db.prepare("INSERT INTO users (email, role) VALUES (?, ?)").run("owner@krymgeo.ru", "owner").lastInsertRowid;
   const insertObject = db.prepare(`
-    INSERT INTO objects (name, type, description, lat, lng, price_per_night, image_url, owner_id, ical_sync_url, region, distance_to_sea, distance_to_stop)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO objects (name, type, description, address, lat, lng, price_per_night, image_url, owner_id, ical_sync_url, region, distance_to_sea, distance_to_stop)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  insertObject.run("Вилла Елена", "Отель", "Роскошный отдых в сердце Ялты с панорамным видом на море.", 44.4952, 34.1663, 15000, "/images/stay-villa-elena.svg", ownerId, "https://example.com/sync/villa-elena.ics", "yalta", "100м", "200м");
-  insertObject.run("Эко-дом Мыс Фиолент", "Гостевой дом", "Тихий дом рядом со знаменитым Яшмовым пляжем.", 44.5007, 33.4833, 4500, "/images/stay-fiolent.svg", ownerId, null, "sevastopol", "300м", "500м");
-  insertObject.run("Апартаменты с видом на Судакскую крепость", "Апартаменты", "Современные апартаменты с прямым видом на крепость.", 44.8436, 34.9581, 3200, "/images/stay-sudak.svg", ownerId, null, "sudak", "700м", "250м");
+  insertObject.run("Вилла Елена", "Отель", "Роскошный отдых в сердце Ялты с панорамным видом на море.", "Координаты: 44.4952, 34.1663 (Ялта)", 44.4952, 34.1663, 15000, "/images/stay-villa-elena.svg", ownerId, "https://example.com/sync/villa-elena.ics", "yalta", "100м", "200м");
+  insertObject.run("Эко-дом Мыс Фиолент", "Гостевой дом", "Тихий дом рядом со знаменитым Яшмовым пляжем.", "Координаты: 44.5007, 33.4833 (Севастополь, мыс Фиолент)", 44.5007, 33.4833, 4500, "/images/stay-fiolent.svg", ownerId, null, "sevastopol", "300м", "500м");
+  insertObject.run("Апартаменты с видом на Судакскую крепость", "Апартаменты", "Современные апартаменты с прямым видом на крепость.", "Координаты: 44.8436, 34.9581 (Судак)", 44.8436, 34.9581, 3200, "/images/stay-sudak.svg", ownerId, null, "sudak", "700м", "250м");
+}
+
+const backfillObjectAddress = db.prepare(`
+  UPDATE objects
+  SET address = COALESCE(address, ?)
+  WHERE name = ? AND (address IS NULL OR TRIM(address) = '')
+`);
+backfillObjectAddress.run("Координаты: 44.4952, 34.1663 (Ялта)", "Вилла Елена");
+backfillObjectAddress.run("Координаты: 44.5007, 33.4833 (Севастополь, мыс Фиолент)", "Эко-дом Мыс Фиолент");
+backfillObjectAddress.run("Координаты: 44.8436, 34.9581 (Судак)", "Апартаменты с видом на Судакскую крепость");
+
+const tourismPlacesCount = db.prepare("SELECT COUNT(*) as count FROM tourism_places").get() as { count: number };
+if (tourismPlacesCount.count === 0) {
+  const insertTourismPlace = db.prepare(`
+    INSERT INTO tourism_places (name, address, category, category_id, lat, lng, source)
+    VALUES (?, ?, ?, ?, ?, ?, 'local')
+  `);
+
+  for (const place of defaultTourismPlacesSeed) {
+    insertTourismPlace.run(place.name, place.address, place.category, place.categoryId, place.lat, place.lng);
+  }
 }
 
 const buildLocalRoute = (prompt: string) => ({
@@ -647,12 +766,28 @@ const getYandexApiKey = () =>
   getConfig('YANDEX_GPT_KEY') ||
   getConfig('YC_API_KEY') ||
   getConfig('YANDEX_CLOUD_API_KEY');
+const getYandexSpeechKitApiKey = () =>
+  getConfig('YANDEX_SPEECHKIT_API_KEY') ||
+  getConfig('YANDEX_SPEECHKIT_KEY') ||
+  getConfig('YANDEX_API_KEY') ||
+  getConfig('YC_API_KEY') ||
+  getConfig('YANDEX_CLOUD_API_KEY');
 const getYandexFolderId = () =>
+  getConfig('YANDEX_FOLDER_ID') ||
+  getConfig('YC_FOLDER_ID') ||
+  getConfig('YANDEX_CLOUD_FOLDER_ID');
+const getYandexSpeechKitFolderId = () =>
+  getConfig('YANDEX_SPEECHKIT_FOLDER_ID') ||
   getConfig('YANDEX_FOLDER_ID') ||
   getConfig('YC_FOLDER_ID') ||
   getConfig('YANDEX_CLOUD_FOLDER_ID');
 const getYandexGptModel = () => getConfig('YANDEX_GPT_MODEL') || 'yandexgpt-lite';
 const getYandexTtsVoice = () => getConfig('YANDEX_TTS_VOICE') || 'alena';
+const getYandexMapsSearchApiKey = () =>
+  getConfig('YANDEX_MAPS_SEARCH_API_KEY') ||
+  getConfig('YANDEX_ORG_SEARCH_API_KEY') ||
+  getConfig('YANDEX_SEARCH_API_KEY');
+const CRIMEA_BBOX = '32.4,44.3~36.7,46.2';
 const assistantInstruction =
   'Ты — Алиса, голосовой помощник туристической платформы Навигатор Крым. Ты помогаешь путешественникам по Крыму находить и сравнивать туристические ресурсы: гостиницы, отели, апартаменты, квартиры для аренды, такси, рестораны, столовые, развлечения, экскурсии, музеи, выставки и сопутствующие сервисы. Всегда отвечай на русском языке, коротко, понятно и практично, с акцентом на конкретные варианты для поездки. Не выдумывай факты и прямо сообщай, если данных недостаточно. Всегда говори от женского лица независимо от запроса пользователя: используй формы «нашла», «подобрала», «рекомендую», «могу предложить» и избегай мужских форм.';
 
@@ -692,6 +827,105 @@ const normalizeSearchText = (value: string) =>
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+const tourismCategoryTokens: Record<string, string[]> = {
+  food: ['ресторан', 'кафе', 'столов', 'еда'],
+  hotels: ['отел', 'гостин', 'апартамент', 'санатор', 'вилл', 'гостев'],
+  markets: ['продукт', 'магазин', 'супермаркет'],
+  pharmacy: ['аптек'],
+  malls: ['торгов', 'тц'],
+  coffee: ['кофе', 'кофейн'],
+  sport: ['спорт', 'фитнес', 'тренаж'],
+  gas: ['азс', 'заправ'],
+  autoservice: ['автосервис', 'сто', 'шиномонтаж'],
+  atm: ['банкомат', 'банк'],
+  gos: ['госуслуг', 'мфц', 'администрац', 'услуг'],
+  hospital: ['больниц', 'клиник', 'мед', 'поликлиник'],
+  beauty: ['салон', 'красот', 'парикмахер', 'barber'],
+  museum: ['музей', 'выстав', 'галере'],
+  fastfood: ['фастфуд', 'бургер', 'пицц', 'быстр'],
+};
+
+const buildLocalTourismPlaces = (query: string, categories: string[] = []) => {
+  const normalizedQuery = normalizeSearchText(query || '');
+  const queryTokens = normalizedQuery.split(' ').filter((token) => token.length >= 3);
+  const categoryTokens = categories.flatMap((id) => tourismCategoryTokens[id] || []);
+  const allTourismRows = db
+    .prepare('SELECT id, name, address, category, category_id, lat, lng FROM tourism_places')
+    .all() as any[];
+  const allObjects = db
+    .prepare('SELECT id, name, type, description, address, lat, lng FROM objects')
+    .all() as any[];
+
+  const matchesSearch = (haystack: string, categoryId?: string) => {
+    const normalizedHaystack = normalizeSearchText(haystack);
+    const matchesCategory =
+      !categoryTokens.length ||
+      categoryTokens.some((token) => normalizedHaystack.includes(token)) ||
+      (categoryId ? categories.includes(String(categoryId)) : false);
+    const matchesQuery = !queryTokens.length || queryTokens.some((token) => normalizedHaystack.includes(token));
+    return matchesCategory && matchesQuery;
+  };
+
+  const placesFromTourismTable = allTourismRows
+    .filter((item) =>
+      matchesSearch(
+        `${item.name || ''} ${item.category || ''} ${item.address || ''} ${item.category_id || ''}`,
+        item.category_id,
+      ),
+    )
+    .map((item) => ({
+      id: `local-poi-${item.id}`,
+      name: String(item.name || 'Туристический объект'),
+      address: String(item.address || ''),
+      category: String(item.category || 'Туризм'),
+      lat: Number(item.lat),
+      lng: Number(item.lng),
+      source: 'local' as const,
+      url: '',
+      phones: '',
+      hours: '',
+    }))
+    .filter((item) => Number.isFinite(item.lat) && Number.isFinite(item.lng));
+
+  const placesFromObjects = allObjects
+    .filter((item) =>
+      matchesSearch(`${item.name || ''} ${item.type || ''} ${item.description || ''} ${item.address || ''}`, 'hotels'),
+    )
+    .map((item) => ({
+      id: `local-object-${item.id}`,
+      name: String(item.name || 'Объект размещения'),
+      address: String(item.address || item.description || ''),
+      category: String(item.type || 'Отель'),
+      lat: Number(item.lat),
+      lng: Number(item.lng),
+      source: 'local' as const,
+      url: '',
+      phones: '',
+      hours: '',
+    }))
+    .filter((item) => Number.isFinite(item.lat) && Number.isFinite(item.lng));
+
+  return mergeTourismPlaces(placesFromTourismTable, placesFromObjects);
+};
+
+const mergeTourismPlaces = (localPlaces: any[], yandexPlaces: any[]) => {
+  const result: any[] = [];
+  const seen = new Set<string>();
+
+  const appendUnique = (items: any[]) => {
+    for (const item of items) {
+      const key = `${normalizeSearchText(item?.name || '')}|${Number(item?.lat).toFixed(4)}|${Number(item?.lng).toFixed(4)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push(item);
+    }
+  };
+
+  appendUnique(localPlaces);
+  appendUnique(yandexPlaces);
+  return result;
+};
 
 const extractBudgetMax = (message: string) => {
   const normalized = normalizeSearchText(message);
@@ -934,6 +1168,197 @@ async function startServer() {
     res.json(db.prepare(query).all(...params));
   });
 
+  app.get('/api/v1/pois', (_req, res) => {
+    const rows = db
+      .prepare(`
+        SELECT id, name, address, category_id, category, lat, lng
+        FROM tourism_places
+        WHERE category_id IN ('gas', 'food', 'coffee', 'fastfood', 'museum', 'autoservice', 'sport')
+        ORDER BY id ASC
+      `)
+      .all() as any[];
+
+    const mapPoiType = (categoryId: string): 'gas' | 'restaurant' | 'attraction' => {
+      if (categoryId === 'gas') return 'gas';
+      if (categoryId === 'food' || categoryId === 'coffee' || categoryId === 'fastfood') return 'restaurant';
+      return 'attraction';
+    };
+
+    const pois = rows
+      .map((row) => ({
+        id: Number(row.id),
+        name: String(row.name || 'Точка интереса'),
+        address: String(row.address || ''),
+        type: mapPoiType(String(row.category_id || '')),
+        category: String(row.category || ''),
+        lat: Number(row.lat),
+        lng: Number(row.lng),
+      }))
+      .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng));
+
+    res.json(pois);
+  });
+
+  app.get('/api/v1/tourism/places', async (req, res) => {
+    const rawQuery = String(req.query.q || req.query.query || 'отели и гостиницы');
+    const query = rawQuery.trim() || 'отели и гостиницы';
+    const categories = String(req.query.categories || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const categoryQuery = categories.flatMap((id) => tourismCategoryTokens[id] || []).join(' ');
+    const effectiveQuery = `${query} ${categoryQuery}`.trim() || 'отели и гостиницы';
+    const resultsRaw = Number(req.query.results ?? 60);
+    const results = Number.isFinite(resultsRaw) ? Math.min(Math.max(Math.round(resultsRaw), 1), 100) : 60;
+    const bbox = typeof req.query.bbox === 'string' && req.query.bbox.trim() ? req.query.bbox.trim() : CRIMEA_BBOX;
+    const apiKey = getYandexMapsSearchApiKey();
+    const localPlaces = buildLocalTourismPlaces(effectiveQuery, categories);
+
+    if (!apiKey) {
+      return res.json({
+        source: 'local',
+        query: effectiveQuery,
+        categories,
+        places: localPlaces,
+        warning: 'Yandex Maps Search API key is not configured, returned local data.',
+      });
+    }
+
+    try {
+      const requestUrl = new URL('https://search-maps.yandex.ru/v1/');
+      requestUrl.searchParams.set('apikey', apiKey);
+      requestUrl.searchParams.set('text', effectiveQuery);
+      requestUrl.searchParams.set('lang', 'ru_RU');
+      requestUrl.searchParams.set('type', 'biz');
+      requestUrl.searchParams.set('bbox', bbox);
+      requestUrl.searchParams.set('rspn', '1');
+      requestUrl.searchParams.set('results', String(results));
+
+      const response = await fetch(requestUrl.toString());
+      if (!response.ok) {
+        const status = response.status;
+        const details = (await response.text().catch(() => '')).slice(0, 300);
+
+        if (status === 401 || status === 403) {
+          if (!hasLoggedTourism403) {
+            console.info(`[tourism] Yandex Search API access denied (${status}). Using local fallback.`);
+            hasLoggedTourism403 = true;
+          }
+          return res.json({
+            source: 'local-fallback',
+            query: effectiveQuery,
+            categories,
+            places: localPlaces,
+            warning:
+              'Доступ к Yandex Search API запрещен (401/403). Используются данные из локальной базы.',
+          });
+        }
+
+        console.warn(
+          `[tourism] Yandex Search API returned status ${status}. Using local fallback.${details ? ` Details: ${details}` : ''}`
+        );
+        return res.json({
+          source: 'local-fallback',
+          query: effectiveQuery,
+          categories,
+          places: localPlaces,
+          warning: `Yandex API вернул ошибку ${status}. Используются данные из локальной базы.`,
+        });
+      }
+
+      const payload = await response.json();
+      const features = Array.isArray(payload?.features) ? payload.features : [];
+
+      const places = features
+        .map((feature: any, index: number) => {
+          const coords = Array.isArray(feature?.geometry?.coordinates) ? feature.geometry.coordinates : [];
+          const lng = Number(coords[0]);
+          const lat = Number(coords[1]);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+          const properties = feature?.properties || {};
+          const companyMeta = properties?.CompanyMetaData || {};
+          const categoryList = Array.isArray(companyMeta?.Categories)
+            ? companyMeta.Categories.map((item: any) => String(item?.name || '').trim()).filter(Boolean)
+            : [];
+          const phones = Array.isArray(companyMeta?.Phones)
+            ? companyMeta.Phones.map((item: any) => String(item?.formatted || item?.phone || '').trim()).filter(Boolean)
+            : [];
+
+          return {
+            id: String(feature?.id || `yandex-${lat}-${lng}-${index}`),
+            name: String(companyMeta?.name || properties?.name || 'Туристический объект'),
+            address: String(companyMeta?.address || properties?.description || ''),
+            category: categoryList.join(', ') || 'Туризм',
+            lat,
+            lng,
+            source: 'yandex' as const,
+            url: String(companyMeta?.url || ''),
+            phones: phones.join(', '),
+            hours: String(companyMeta?.Hours?.text || ''),
+          };
+        })
+        .filter(Boolean);
+
+      if (!places.length) {
+        return res.json({
+          source: 'local-fallback',
+          query: effectiveQuery,
+          categories,
+          places: localPlaces,
+          warning: 'No places returned by Yandex API, local fallback was used.',
+        });
+      }
+
+      const mergedPlaces = mergeTourismPlaces(localPlaces, places);
+
+      return res.json({
+        source: 'mixed',
+        query: effectiveQuery,
+        categories,
+        places: mergedPlaces,
+      });
+    } catch (error) {
+      const err = error as any;
+      const code = String(err?.cause?.code || err?.code || '');
+      const hostname = String(err?.cause?.hostname || '');
+      const message = String(err?.cause?.message || err?.message || 'unknown error');
+
+      if (code === 'ENOTFOUND') {
+        console.warn(
+          `[tourism] Yandex Search API host is unavailable (${hostname || 'search-maps.yandex.ru'}). Using local fallback.`
+        );
+        return res.json({
+          source: 'local-fallback',
+          query: effectiveQuery,
+          categories,
+          places: localPlaces,
+          warning: 'Сервис поиска Яндекс Карт временно недоступен. Используются данные из локальной базы.',
+        });
+      }
+
+      if (code === 'ETIMEDOUT' || code === 'ECONNRESET' || code === 'ECONNREFUSED') {
+        console.warn(`[tourism] Yandex Search API network error (${code}). Using local fallback.`);
+        return res.json({
+          source: 'local-fallback',
+          query: effectiveQuery,
+          categories,
+          places: localPlaces,
+          warning: 'Сетевая ошибка при обращении к Яндекс Поиску. Используются данные из локальной базы.',
+        });
+      }
+
+      console.warn(`[tourism] Yandex Search API request failed (${message}). Using local fallback.`);
+      return res.json({
+        source: 'local-fallback',
+        query: effectiveQuery,
+        categories,
+        places: localPlaces,
+        warning: 'Yandex API request failed, local fallback was used.',
+      });
+    }
+  });
+
   app.get('/api/v1/objects/:id', (req, res) => {
     const object = db.prepare('SELECT * FROM objects WHERE id = ?').get(req.params.id);
     if (!object) return res.status(404).json({ error: 'Not found' });
@@ -1029,15 +1454,17 @@ async function startServer() {
 
   app.post('/api/v1/ai/transcribe', express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
     const AI_MODE = getConfig('AI_MODE') || 'yandex';
-    const YANDEX_API_KEY = getYandexApiKey();
-    const YANDEX_FOLDER_ID = getYandexFolderId();
+    const YANDEX_SPEECHKIT_API_KEY = getYandexSpeechKitApiKey();
+    const YANDEX_SPEECHKIT_FOLDER_ID = getYandexSpeechKitFolderId();
 
     if (AI_MODE === 'local') {
       return res.json({ text: '' });
     }
 
-    if (!YANDEX_API_KEY || !YANDEX_FOLDER_ID) {
-      return res.status(400).json({ text: 'SpeechKit не настроен. Укажите API ключ и Folder ID в настройках.' });
+    if (!YANDEX_SPEECHKIT_API_KEY || !YANDEX_SPEECHKIT_FOLDER_ID) {
+      return res.status(400).json({
+        text: 'SpeechKit не настроен. Укажите YANDEX_SPEECHKIT_API_KEY (или YANDEX_API_KEY) и YANDEX_SPEECHKIT_FOLDER_ID (или YANDEX_FOLDER_ID).',
+      });
     }
 
     if (!req.body || !(req.body as Buffer).length) {
@@ -1061,8 +1488,8 @@ async function startServer() {
         {
           method: 'POST',
           headers: {
-            Authorization: `Api-Key ${YANDEX_API_KEY}`,
-            'x-folder-id': YANDEX_FOLDER_ID,
+            Authorization: `Api-Key ${YANDEX_SPEECHKIT_API_KEY}`,
+            'x-folder-id': YANDEX_SPEECHKIT_FOLDER_ID,
             'Content-Type': contentType,
           },
           body: req.body as Buffer,
@@ -1094,8 +1521,8 @@ async function startServer() {
 
   app.post('/api/v1/ai/speak', async (req, res) => {
     const AI_MODE = getConfig('AI_MODE') || 'yandex';
-    const YANDEX_API_KEY = getYandexApiKey();
-    const YANDEX_FOLDER_ID = getYandexFolderId();
+    const YANDEX_SPEECHKIT_API_KEY = getYandexSpeechKitApiKey();
+    const YANDEX_SPEECHKIT_FOLDER_ID = getYandexSpeechKitFolderId();
     const YANDEX_TTS_VOICE = getYandexTtsVoice();
     const text = String(req.body?.text || '').trim();
 
@@ -1103,8 +1530,10 @@ async function startServer() {
       return res.status(204).end();
     }
 
-    if (!YANDEX_API_KEY || !YANDEX_FOLDER_ID) {
-      return res.status(400).json({ text: 'SpeechKit TTS не настроен. Укажите API ключ и Folder ID в настройках.' });
+    if (!YANDEX_SPEECHKIT_API_KEY || !YANDEX_SPEECHKIT_FOLDER_ID) {
+      return res.status(400).json({
+        text: 'SpeechKit TTS не настроен. Укажите YANDEX_SPEECHKIT_API_KEY (или YANDEX_API_KEY) и YANDEX_SPEECHKIT_FOLDER_ID (или YANDEX_FOLDER_ID).',
+      });
     }
 
     if (!text) {
@@ -1116,7 +1545,7 @@ async function startServer() {
         text,
         lang: 'ru-RU',
         voice: YANDEX_TTS_VOICE,
-        folderId: YANDEX_FOLDER_ID,
+        folderId: YANDEX_SPEECHKIT_FOLDER_ID,
         format: 'oggopus',
         sampleRateHertz: '48000',
       });
@@ -1124,7 +1553,7 @@ async function startServer() {
       const response = await fetch('https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize', {
         method: 'POST',
         headers: {
-          Authorization: `Api-Key ${YANDEX_API_KEY}`,
+          Authorization: `Api-Key ${YANDEX_SPEECHKIT_API_KEY}`,
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: params,
