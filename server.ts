@@ -754,6 +754,15 @@ backfillObjectAddress.run("Координаты: 44.4952, 34.1663 (Ялта)", "
 backfillObjectAddress.run("Координаты: 44.5007, 33.4833 (Севастополь, мыс Фиолент)", "Эко-дом Мыс Фиолент");
 backfillObjectAddress.run("Координаты: 44.8436, 34.9581 (Судак)", "Апартаменты с видом на Судакскую крепость");
 
+const backfillObjectRegion = db.prepare(`
+  UPDATE objects
+  SET region = COALESCE(NULLIF(region, ''), ?)
+  WHERE name = ?
+`);
+backfillObjectRegion.run("yalta", "Вилла Елена");
+backfillObjectRegion.run("sevastopol", "Эко-дом Мыс Фиолент");
+backfillObjectRegion.run("sudak", "Апартаменты с видом на Судакскую крепость");
+
 const tourismPlacesCount = db.prepare("SELECT COUNT(*) as count FROM tourism_places").get() as { count: number };
 if (tourismPlacesCount.count === 0) {
   const insertTourismPlace = db.prepare(`
