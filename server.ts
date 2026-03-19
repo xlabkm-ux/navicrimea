@@ -74,6 +74,60 @@ db.exec(`
   );
   CREATE UNIQUE INDEX IF NOT EXISTS idx_tourism_places_name_coords
     ON tourism_places(name, lat, lng);
+  CREATE TABLE IF NOT EXISTS listing_categories (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    icon TEXT,
+    sort_order INTEGER DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS listing_offers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    object_id INTEGER,
+    category_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    short_description TEXT,
+    region TEXT,
+    district TEXT,
+    distance_to_sea_m INTEGER,
+    distance_to_center_m INTEGER,
+    price_from INTEGER,
+    rating REAL DEFAULT 0,
+    reviews_count INTEGER DEFAULT 0,
+    has_discount INTEGER DEFAULT 0,
+    discount_percent INTEGER DEFAULT 0,
+    is_verified INTEGER DEFAULT 0,
+    free_cancellation INTEGER DEFAULT 0,
+    breakfast_included INTEGER DEFAULT 0,
+    pets_allowed INTEGER DEFAULT 0,
+    family_friendly INTEGER DEFAULT 0,
+    urgent_badge TEXT,
+    cover_image_url TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY(object_id) REFERENCES objects(id),
+    FOREIGN KEY(category_id) REFERENCES listing_categories(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_listing_offers_category ON listing_offers(category_id);
+  CREATE INDEX IF NOT EXISTS idx_listing_offers_sort ON listing_offers(price_from, rating, distance_to_sea_m);
+  CREATE TABLE IF NOT EXISTS listing_offer_details (
+    offer_id INTEGER PRIMARY KEY,
+    full_description TEXT NOT NULL,
+    amenities_json TEXT,
+    policies_json TEXT,
+    included_json TEXT,
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY(offer_id) REFERENCES listing_offers(id) ON DELETE CASCADE
+  );
+  CREATE TABLE IF NOT EXISTS design_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic TEXT NOT NULL,
+    comment TEXT NOT NULL,
+    author TEXT DEFAULT 'Команда',
+    status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new','in_review','planned','done')),
+    priority TEXT NOT NULL DEFAULT 'normal' CHECK(priority IN ('low','normal','high')),
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 const ensureColumnExists = (tableName: string, columnName: string, definition: string) => {
@@ -85,6 +139,9 @@ const ensureColumnExists = (tableName: string, columnName: string, definition: s
 };
 
 ensureColumnExists("objects", "address", "TEXT");
+ensureColumnExists("objects", "region", "TEXT");
+ensureColumnExists("objects", "distance_to_sea", "TEXT");
+ensureColumnExists("objects", "distance_to_stop", "TEXT");
 
 const defaultTourismPlacesSeed = [
   {
@@ -245,7 +302,9 @@ type PhotosPayload = {
   updatedAt: number;
 };
 
-const PHOTO_CACHE_TTL_MS = Number(process.env.PHOTO_CACHE_TTL_MS || 1000 * 60 * 60 * 6);
+const PHOTO_CACHE_TTL_MS = Number(process.env.PHOTO_CACHE_TTL_MS || 1000 * 60 * 60 * 24 * 7);
+const PHOTO_MIN_BYTES = Number(process.env.PHOTO_MIN_BYTES || 50_000);
+const PHOTO_SEMANTIC_SIZE = String(process.env.PHOTO_YANDEX_IMAGE_SIZE || "MEDIUM").toUpperCase();
 const regionPhotoCache = new Map<string, { updatedAt: number; payload: PhotosPayload }>();
 const regionPhotoInFlight = new Map<string, Promise<PhotosPayload>>();
 
@@ -465,7 +524,7 @@ const extractYandexImageUrls = async (queryText: string) => {
         searchType: "SEARCH_TYPE_RU",
       },
       imageSpec: {
-        imageSize: "LARGE",
+        imageSize: PHOTO_SEMANTIC_SIZE,
       },
       docsOnPage: 20,
       page: 0,
@@ -500,13 +559,13 @@ const downloadImageToCache = async (imageUrl: string) => {
     const fullPath = path.join(photoCacheDir, fileName);
     if (fs.existsSync(fullPath)) {
       const existingSize = fs.statSync(fullPath).size;
-      if (existingSize < 60_000) {
+      if (existingSize < PHOTO_MIN_BYTES) {
         fs.unlinkSync(fullPath);
         return null;
       }
       return `/uploads/photo-cache/${fileName}`;
     }
-    if (bytes.length < 60_000) return null;
+    if (bytes.length < PHOTO_MIN_BYTES) return null;
     fs.writeFileSync(fullPath, bytes);
     return `/uploads/photo-cache/${fileName}`;
   } catch {
@@ -705,6 +764,195 @@ if (tourismPlacesCount.count === 0) {
   for (const place of defaultTourismPlacesSeed) {
     insertTourismPlace.run(place.name, place.address, place.category, place.categoryId, place.lat, place.lng);
   }
+}
+
+const defaultListingCategories = [
+  { id: "hotels", title: "Отели", icon: "Bed", sortOrder: 1 },
+  { id: "apartments", title: "Апартаменты", icon: "Landmark", sortOrder: 2 },
+  { id: "guesthouses", title: "Гостевые дома", icon: "Home", sortOrder: 3 },
+  { id: "food", title: "Еда", icon: "Coffee", sortOrder: 4 },
+  { id: "activities", title: "Активности", icon: "Flag", sortOrder: 5 },
+] as const;
+
+const categoryCount = db.prepare("SELECT COUNT(*) as count FROM listing_categories").get() as { count: number };
+if (categoryCount.count === 0) {
+  const insertCategory = db.prepare(`
+    INSERT INTO listing_categories (id, title, icon, sort_order)
+    VALUES (?, ?, ?, ?)
+  `);
+  for (const category of defaultListingCategories) {
+    insertCategory.run(category.id, category.title, category.icon, category.sortOrder);
+  }
+}
+
+const parseMeters = (value: string | null | undefined) => {
+  if (!value) return null;
+  const matched = String(value).match(/\d+/);
+  if (!matched) return null;
+  const parsed = Number(matched[0]);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const mapObjectTypeToCategory = (type: string | null | undefined) => {
+  const normalized = String(type || "").toLowerCase();
+  if (normalized.includes("апартамент")) return "apartments";
+  if (normalized.includes("гостев")) return "guesthouses";
+  return "hotels";
+};
+
+const listingOffersCount = db.prepare("SELECT COUNT(*) as count FROM listing_offers").get() as { count: number };
+if (listingOffersCount.count === 0) {
+  const objects = db
+    .prepare(
+      "SELECT id, name, type, description, region, address, distance_to_sea, price_per_night, image_url FROM objects ORDER BY id ASC",
+    )
+    .all() as Array<{
+    id: number;
+    name: string;
+    type: string;
+    description: string;
+    region: string | null;
+    address: string | null;
+    distance_to_sea: string | null;
+    price_per_night: number | null;
+    image_url: string | null;
+  }>;
+
+  const insertOffer = db.prepare(`
+    INSERT INTO listing_offers (
+      object_id, category_id, title, short_description, region, district, distance_to_sea_m, distance_to_center_m,
+      price_from, rating, reviews_count, has_discount, discount_percent, is_verified, free_cancellation,
+      breakfast_included, pets_allowed, family_friendly, urgent_badge, cover_image_url
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const insertOfferDetails = db.prepare(`
+    INSERT INTO listing_offer_details (offer_id, full_description, amenities_json, policies_json, included_json)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+
+  for (const object of objects) {
+    const categoryId = mapObjectTypeToCategory(object.type);
+    const district = object.address?.split("(")[1]?.replace(")", "").trim() || object.region || "Крым";
+    const distanceToSea = parseMeters(object.distance_to_sea);
+    const priceFrom = object.price_per_night ? Math.round(object.price_per_night) : 0;
+    const hasDiscount = priceFrom > 7000 ? 1 : 0;
+    const discountPercent = hasDiscount ? 8 : 0;
+    const rating = priceFrom > 7000 ? 4.8 : priceFrom > 4500 ? 4.6 : 4.4;
+    const reviewsCount = priceFrom > 7000 ? 184 : priceFrom > 4500 ? 96 : 54;
+    const urgentBadge = hasDiscount ? "Цена недели" : "Быстрое бронирование";
+
+    const result = insertOffer.run(
+      object.id,
+      categoryId,
+      object.name,
+      object.description || "Комфортное размещение в туристической локации Крыма.",
+      object.region || "crimea",
+      district,
+      distanceToSea,
+      1200,
+      priceFrom,
+      rating,
+      reviewsCount,
+      hasDiscount,
+      discountPercent,
+      1,
+      1,
+      categoryId === "hotels" ? 1 : 0,
+      categoryId !== "hotels" ? 1 : 0,
+      1,
+      urgentBadge,
+      object.image_url || "/images/hero-coast-1.svg",
+    );
+
+    const offerId = Number(result.lastInsertRowid);
+    insertOfferDetails.run(
+      offerId,
+      `Полная карточка объекта "${object.name}" будет доработана на следующем этапе проектирования. Сейчас доступно краткое описание и ключевые параметры в списке.`,
+      JSON.stringify(["Wi-Fi", "Парковка", "Кондиционер"]),
+      JSON.stringify(["Бесплатная отмена за 48 часов", "Заезд после 14:00"]),
+      JSON.stringify(["Поддержка 24/7", "Подбор маршрута рядом"]),
+    );
+  }
+
+  const supplementalOffers = [
+    {
+      categoryId: "food",
+      title: "Ресторан у моря, Ялта",
+      shortDescription: "Локальная кухня, вид на закат, бронирование столика онлайн.",
+      region: "yalta",
+      district: "Набережная",
+      distanceToSea: 120,
+      priceFrom: 1500,
+      rating: 4.7,
+      reviewsCount: 211,
+      hasDiscount: 1,
+      discountPercent: 12,
+      urgentBadge: "Сет дня",
+      cover: "/images/hero-sea-night.svg",
+    },
+    {
+      categoryId: "activities",
+      title: "Прогулка на катере, Балаклава",
+      shortDescription: "2 часа вдоль бухты, аудиогид и фотостопы.",
+      region: "balaklava",
+      district: "Марина",
+      distanceToSea: 20,
+      priceFrom: 3200,
+      rating: 4.9,
+      reviewsCount: 138,
+      hasDiscount: 0,
+      discountPercent: 0,
+      urgentBadge: "Осталось 3 места",
+      cover: "/images/hero-coast-2.svg",
+    },
+  ];
+
+  for (const item of supplementalOffers) {
+    const result = insertOffer.run(
+      null,
+      item.categoryId,
+      item.title,
+      item.shortDescription,
+      item.region,
+      item.district,
+      item.distanceToSea,
+      900,
+      item.priceFrom,
+      item.rating,
+      item.reviewsCount,
+      item.hasDiscount,
+      item.discountPercent,
+      1,
+      1,
+      0,
+      1,
+      1,
+      item.urgentBadge,
+      item.cover,
+    );
+    const offerId = Number(result.lastInsertRowid);
+    insertOfferDetails.run(
+      offerId,
+      `Полное описание "${item.title}" запланировано в следующем спринте после обсуждения прототипа.`,
+      JSON.stringify(["Онлайн-подтверждение", "Поддержка в чате"]),
+      JSON.stringify(["Отмена за 24 часа", "Подтверждение в течение 15 минут"]),
+      JSON.stringify(["Подсказки по маршруту", "Контакты организатора"]),
+    );
+  }
+}
+
+const feedbackCount = db.prepare("SELECT COUNT(*) as count FROM design_feedback").get() as { count: number };
+if (feedbackCount.count === 0) {
+  db.prepare(`
+    INSERT INTO design_feedback (topic, comment, author, status, priority)
+    VALUES (?, ?, ?, 'new', 'normal')
+  `).run(
+    "Старт проектирования",
+    "Нужно согласовать состав полей карточки полного описания объекта и критерии сортировки для туриста.",
+    "Система",
+  );
 }
 
 const buildLocalRoute = (prompt: string) => ({
@@ -1366,6 +1614,216 @@ async function startServer() {
     res.json({ ...object, bookings });
   });
 
+  app.get('/api/v2/listings/categories', (_req, res) => {
+    const categories = db
+      .prepare("SELECT id, title, icon, sort_order FROM listing_categories ORDER BY sort_order ASC, title ASC")
+      .all();
+    res.json(categories);
+  });
+
+  app.get('/api/v2/listings/offers', (req, res) => {
+    const categoryId = String(req.query.categoryId || "").trim();
+    const sortBy = String(req.query.sortBy || "recommended").trim();
+    const familyOnly = String(req.query.family || "") === "1";
+    const petsOnly = String(req.query.pets || "") === "1";
+    const freeCancellationOnly = String(req.query.freeCancellation || "") === "1";
+    const limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 200);
+
+    const where: string[] = [];
+    const params: Array<string | number> = [];
+    if (categoryId) {
+      where.push("o.category_id = ?");
+      params.push(categoryId);
+    }
+    if (familyOnly) where.push("o.family_friendly = 1");
+    if (petsOnly) where.push("o.pets_allowed = 1");
+    if (freeCancellationOnly) where.push("o.free_cancellation = 1");
+
+    const orderByBySort: Record<string, string> = {
+      recommended: `
+        (o.rating * 20)
+        + (o.reviews_count * 0.15)
+        + CASE WHEN o.has_discount = 1 THEN 8 ELSE 0 END
+        + CASE WHEN o.is_verified = 1 THEN 6 ELSE 0 END
+        + CASE WHEN o.distance_to_sea_m IS NOT NULL THEN MAX(0, 20 - (o.distance_to_sea_m / 100.0)) ELSE 0 END
+        DESC, o.price_from ASC
+      `,
+      price_asc: "o.price_from ASC, o.rating DESC",
+      price_desc: "o.price_from DESC, o.rating DESC",
+      distance_asc: "COALESCE(o.distance_to_sea_m, 999999) ASC, o.rating DESC",
+      rating_desc: "o.rating DESC, o.reviews_count DESC, o.price_from ASC",
+      discount_desc: "o.discount_percent DESC, o.rating DESC",
+      newest: "o.id DESC",
+    };
+    const orderBy = orderByBySort[sortBy] || orderByBySort.recommended;
+    const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const query = `
+      SELECT
+        o.id,
+        o.object_id,
+        o.category_id,
+        c.title AS category_title,
+        o.title,
+        o.short_description,
+        o.region,
+        o.district,
+        o.distance_to_sea_m,
+        o.distance_to_center_m,
+        o.price_from,
+        o.rating,
+        o.reviews_count,
+        o.has_discount,
+        o.discount_percent,
+        o.is_verified,
+        o.free_cancellation,
+        o.breakfast_included,
+        o.pets_allowed,
+        o.family_friendly,
+        o.urgent_badge,
+        o.cover_image_url
+      FROM listing_offers o
+      JOIN listing_categories c ON c.id = o.category_id
+      ${whereClause}
+      ORDER BY ${orderBy}
+      LIMIT ?
+    `;
+
+    const rows = db.prepare(query).all(...params, limit);
+    res.json(rows);
+  });
+
+  app.get('/api/v2/listings/offers/:id', (req, res) => {
+    const row = db
+      .prepare(`
+        SELECT
+          o.*,
+          c.title AS category_title,
+          d.full_description,
+          d.amenities_json,
+          d.policies_json,
+          d.included_json,
+          obj.name AS object_name,
+          obj.description AS object_description,
+          obj.address AS object_address,
+          obj.lat AS object_lat,
+          obj.lng AS object_lng
+        FROM listing_offers o
+        JOIN listing_categories c ON c.id = o.category_id
+        LEFT JOIN listing_offer_details d ON d.offer_id = o.id
+        LEFT JOIN objects obj ON obj.id = o.object_id
+        WHERE o.id = ?
+      `)
+      .get(req.params.id) as any;
+
+    if (!row) return res.status(404).json({ error: "Offer not found" });
+    const parseJsonList = (raw: unknown) => {
+      try {
+        const parsed = typeof raw === "string" ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    };
+
+    res.json({
+      ...row,
+      amenities: parseJsonList(row.amenities_json),
+      policies: parseJsonList(row.policies_json),
+      included: parseJsonList(row.included_json),
+      fullCardReady: false,
+    });
+  });
+
+  app.get('/api/v2/design/docs', (_req, res) => {
+    const docsDir = path.join(process.cwd(), "docs");
+    const readDoc = (fileName: string) => {
+      try {
+        return fs.readFileSync(path.join(docsDir, fileName), "utf-8");
+      } catch {
+        return "";
+      }
+    };
+
+    res.json({
+      interfaceDocName: "Описние интерфейса",
+      interfaceDoc: readDoc("Описние интерфейса.md"),
+      databaseDocName: "База данных, структура и данные",
+      databaseDoc: readDoc("База данных, структура и данные.md"),
+    });
+  });
+
+  app.get('/api/v2/design/feedback', (_req, res) => {
+    const rows = db
+      .prepare(`
+        SELECT id, topic, comment, author, status, priority, created_at, updated_at
+        FROM design_feedback
+        ORDER BY id DESC
+      `)
+      .all();
+    res.json(rows);
+  });
+
+  app.post('/api/v2/design/feedback', (req, res) => {
+    const topic = String(req.body?.topic || "").trim();
+    const comment = String(req.body?.comment || "").trim();
+    const author = String(req.body?.author || "Команда").trim() || "Команда";
+    const priority = String(req.body?.priority || "normal").trim();
+    const allowedPriorities = new Set(["low", "normal", "high"]);
+    const safePriority = allowedPriorities.has(priority) ? priority : "normal";
+
+    if (!topic || !comment) {
+      return res.status(400).json({ error: "topic and comment are required" });
+    }
+
+    const result = db
+      .prepare(`
+        INSERT INTO design_feedback (topic, comment, author, status, priority)
+        VALUES (?, ?, ?, 'new', ?)
+      `)
+      .run(topic, comment, author, safePriority);
+
+    const created = db
+      .prepare(`
+        SELECT id, topic, comment, author, status, priority, created_at, updated_at
+        FROM design_feedback
+        WHERE id = ?
+      `)
+      .get(result.lastInsertRowid);
+
+    res.status(201).json(created);
+  });
+
+  app.patch('/api/v2/design/feedback/:id', (req, res) => {
+    const status = String(req.body?.status || "").trim();
+    const allowed = new Set(["new", "in_review", "planned", "done"]);
+    if (!allowed.has(status)) {
+      return res.status(400).json({ error: "invalid status" });
+    }
+
+    const result = db
+      .prepare(`
+        UPDATE design_feedback
+        SET status = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `)
+      .run(status, req.params.id);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: "feedback not found" });
+    }
+
+    const updated = db
+      .prepare(`
+        SELECT id, topic, comment, author, status, priority, created_at, updated_at
+        FROM design_feedback
+        WHERE id = ?
+      `)
+      .get(req.params.id);
+
+    res.json(updated);
+  });
+
   app.post('/api/v1/objects/:id/sync', (req, res) => {
     db.prepare('UPDATE objects SET ical_sync_url = ? WHERE id = ?').run(req.body.ical_sync_url, req.params.id);
     res.json({ status: 'success', message: 'Calendar synchronized with external provider' });
@@ -1583,7 +2041,7 @@ async function startServer() {
     const query = String(req.query.query || 'crimea');
     const forceRefresh = String(req.query.refresh || "").toLowerCase() === "1";
     const payload = await getRegionPhotos(query, forceRefresh);
-    res.setHeader('Cache-Control', 'public, max-age=120');
+    res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
     res.json(payload);
   });
 

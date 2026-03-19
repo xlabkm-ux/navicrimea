@@ -78,11 +78,14 @@ import {
   Landmark,
   Flag,
   Scissors,
+  Menu,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Impression, VisitedPlace } from './types';
 import { ExternalVoiceAssistant } from './components/ExternalVoiceAssistant';
+import { DesignWorkshopPanel } from './components/DesignWorkshopPanel';
+import { ActiveOffersList } from './components/ActiveOffersList';
 
 const CompanionFinder = lazy(() =>
   import('./components/CompanionFinder').then((module) => ({ default: module.CompanionFinder })),
@@ -1693,6 +1696,7 @@ export default function App() {
   const [showAboutUs, setShowAboutUs] = useState(false);
   const [showPartnerMenu, setShowPartnerMenu] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showDesignWorkshop, setShowDesignWorkshop] = useState(false);
   const [showMobileTopMenu, setShowMobileTopMenu] = useState(false);
   const [showMobileBookingSheet, setShowMobileBookingSheet] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -3048,62 +3052,6 @@ export default function App() {
     const ids = new Set(assistantResults.objectIds.map((id) => String(id)));
     return objects.filter((obj) => ids.has(String(obj.id)));
   }, [assistantResults, objects]);
-
-  const regionGallery = useMemo(() => {
-    if (!selectedRegion) return [];
-    
-    const regionName = CRIMEA_REGIONS.find(r => r.id === selectedRegion)?.name || '';
-    const photoPool = regionPhotoPoolById[selectedRegion] || [];
-    const regionObjects = filteredObjects.slice(0, 9);
-    
-    const selectedRegionMeta = CRIMEA_REGIONS.find((r) => r.id === selectedRegion);
-    const fallbackImage = selectedRegionMeta?.fallbackImage || LOCAL_FALLBACK_IMAGES[0];
-    // Generate 18 photos: mix of remote Yandex photos and local fallbacks
-    const gallery = [];
-    
-    const getPoolImage = (index: number) => {
-      if (photoPool.length === 0) return fallbackImage;
-      return photoPool[index % photoPool.length] || fallbackImage;
-    };
-
-    // Add location views
-    for (let i = 1; i <= 9; i++) {
-      gallery.push({
-        id: `view-${selectedRegion}-${i}`,
-        url: getPoolImage(i - 1),
-        title: `${regionName} - Вид ${i}`,
-        type: 'view',
-        fallback: fallbackImage,
-      });
-    }
-    
-    // Add properties
-    regionObjects.forEach((obj, i) => {
-      gallery.push({
-        id: `prop-${obj.id}`,
-        url: obj.image_url,
-        title: obj.name,
-        type: 'property',
-        fallback: fallbackImage,
-        originalObj: obj
-      });
-    });
-    
-    // Fill up to 18 if needed
-    let fillCounter = 10;
-    while (gallery.length < 18) {
-      gallery.push({
-        id: `view-fill-${fillCounter}`,
-        url: getPoolImage(fillCounter),
-        title: `${regionName} - Пейзаж`,
-        type: 'view',
-        fallback: fallbackImage,
-      });
-      fillCounter++;
-    }
-    
-    return gallery.slice(0, 18);
-  }, [selectedRegion, filteredObjects, regionPhotoPoolById]);
 
   // Simple coordinate to SVG percentage conversion
   const getPos = (lat: number, lng: number) => {
@@ -5275,6 +5223,16 @@ export default function App() {
               <span className="font-bold tracking-tight text-[1.5rem] md:text-[1.8rem] leading-none logo-gradient whitespace-nowrap">Навигатор Крым</span>
             </div>
           </div>
+          <button
+            onClick={() => setShowMobileTopMenu((prev) => !prev)}
+            className="md:hidden px-4 min-h-10 rounded-xl border border-black/10 bg-white/90 text-black/70 font-bold uppercase tracking-[0.14em] text-[10px] inline-flex items-center justify-center gap-2"
+            aria-expanded={showMobileTopMenu}
+            aria-label="Открыть меню"
+          >
+            <Menu size={13} />
+            Меню
+            <ChevronDown size={12} className={`transition-transform ${showMobileTopMenu ? 'rotate-180' : ''}`} />
+          </button>
           <div className="nav-menu riviera-menu hidden md:flex items-center justify-center gap-1 2xl:gap-2.5 font-semibold text-black/88 flex-wrap flex-1 min-w-0">
             <button 
               onClick={openRegionsCatalog}
@@ -5340,23 +5298,6 @@ export default function App() {
           </div>
         </div>
 
-        <div className="md:hidden flex items-center gap-2 pb-1">
-          <button
-            onClick={openRegionsCatalog}
-            className="flex-1 min-h-11 rounded-xl border border-[#0E6D87]/25 bg-white/90 text-[#0E6D87] font-bold uppercase tracking-[0.14em] text-[10px] inline-flex items-center justify-center gap-2"
-          >
-            <Layers size={14} />
-            Регионы
-          </button>
-          <button
-            onClick={() => setShowMobileTopMenu((prev) => !prev)}
-            className="px-4 min-h-11 rounded-xl border border-black/10 bg-white/90 text-black/70 font-bold uppercase tracking-[0.14em] text-[10px] inline-flex items-center justify-center gap-2"
-          >
-            Меню
-            <ChevronDown size={12} className={`transition-transform ${showMobileTopMenu ? 'rotate-180' : ''}`} />
-          </button>
-        </div>
-
         <AnimatePresence>
           {showMobileTopMenu && (
             <motion.div
@@ -5365,7 +5306,7 @@ export default function App() {
               exit={{ opacity: 0, y: -8 }}
               className="md:hidden pb-1"
             >
-              <div className="rounded-2xl border border-[#0E6D87]/20 bg-white/95 backdrop-blur-md shadow-[0_12px_28px_rgba(10,77,98,0.12)] p-2 grid grid-cols-2 gap-2">
+              <div className="rounded-2xl border border-[#0E6D87]/20 bg-white/95 backdrop-blur-md shadow-[0_12px_28px_rgba(10,77,98,0.12)] p-2 flex flex-col gap-2">
                 <button
                   onClick={() => {
                     setShowRoutePlanner(true);
@@ -5373,7 +5314,7 @@ export default function App() {
                     setShowCompanionFinder(false);
                     setShowMobileTopMenu(false);
                   }}
-                  className="min-h-11 rounded-xl border border-[#0E6D87]/15 text-[#0E6D87] text-[10px] font-bold uppercase tracking-[0.13em] inline-flex items-center justify-center gap-2"
+                  className="min-h-11 rounded-xl border border-[#0E6D87]/15 text-[#0E6D87] text-[10px] font-bold uppercase tracking-[0.13em] inline-flex items-center justify-start px-4 gap-2"
                 >
                   <Route size={14} />
                   {t.routes}
@@ -5385,7 +5326,7 @@ export default function App() {
                     setShowCompanionFinder(false);
                     setShowMobileTopMenu(false);
                   }}
-                  className="min-h-11 rounded-xl border border-[#0E6D87]/15 text-[#0E6D87] text-[10px] font-bold uppercase tracking-[0.13em] inline-flex items-center justify-center gap-2"
+                  className="min-h-11 rounded-xl border border-[#0E6D87]/15 text-[#0E6D87] text-[10px] font-bold uppercase tracking-[0.13em] inline-flex items-center justify-start px-4 gap-2"
                 >
                   <Sparkles size={14} />
                   {t.experiences}
@@ -5395,7 +5336,7 @@ export default function App() {
                     setShowCompanionFinder(true);
                     setShowMobileTopMenu(false);
                   }}
-                  className="min-h-11 rounded-xl border border-[#0E6D87]/15 text-[#0E6D87] text-[10px] font-bold uppercase tracking-[0.13em] inline-flex items-center justify-center gap-2"
+                  className="min-h-11 rounded-xl border border-[#0E6D87]/15 text-[#0E6D87] text-[10px] font-bold uppercase tracking-[0.13em] inline-flex items-center justify-start px-4 gap-2"
                 >
                   <Users size={14} />
                   {t.findCompanion}
@@ -5406,7 +5347,7 @@ export default function App() {
                     setShowSettingsMenu(false);
                     setShowMobileTopMenu(false);
                   }}
-                  className="min-h-11 rounded-xl border border-[#0E6D87]/15 text-[#0E6D87] text-[10px] font-bold uppercase tracking-[0.13em] inline-flex items-center justify-center gap-2"
+                  className="min-h-11 rounded-xl border border-[#0E6D87]/15 text-[#0E6D87] text-[10px] font-bold uppercase tracking-[0.13em] inline-flex items-center justify-start px-4 gap-2"
                 >
                   <Handshake size={14} />
                   {t.partnerProgram}
@@ -5417,7 +5358,7 @@ export default function App() {
                     setShowPartnerMenu(false);
                     setShowMobileTopMenu(false);
                   }}
-                  className="col-span-2 min-h-11 rounded-xl border border-black/10 text-black/70 text-[10px] font-bold uppercase tracking-[0.13em] inline-flex items-center justify-center gap-2"
+                  className="min-h-11 rounded-xl border border-black/10 text-black/70 text-[10px] font-bold uppercase tracking-[0.13em] inline-flex items-center justify-start px-4 gap-2"
                 >
                   <User size={14} />
                   Настройки
@@ -5584,6 +5525,16 @@ export default function App() {
                 <Info size={14} />
                 {t.aboutUs}
               </button>
+              <button
+                onClick={() => {
+                  setShowDesignWorkshop(true);
+                  setShowSettingsMenu(false);
+                }}
+                className="w-full text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest hover:bg-black/5 transition-colors flex items-center gap-3 text-black/70"
+              >
+                <Wrench size={14} />
+                Проектирование
+              </button>
               <a
                 href="#"
                 onClick={() => setShowSettingsMenu(false)}
@@ -5630,6 +5581,8 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      <DesignWorkshopPanel open={showDesignWorkshop} onClose={() => setShowDesignWorkshop(false)} />
 
       <AnimatePresence>
         {showMobileBookingSheet && (
@@ -5994,63 +5947,13 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Region Gallery - 18 Photos */}
-                <div className="space-y-4">
-                  <h3 className="text-xl font-serif opacity-60">Галерея региона и жилья</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                    {regionGallery.map((item) => (
-                      <motion.div
-                        key={item.id}
-                        whileHover={{ scale: 1.02 }}
-                        onClick={() => item.type === 'property' && setSelectedObject(item.originalObj)}
-                        className="relative aspect-square rounded-2xl overflow-hidden cursor-pointer group shadow-sm"
-                      >
-                        <img 
-                          src={item.url} 
-                          alt={item.title} 
-                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
-                          referrerPolicy="no-referrer"
-                          onError={(event) => handleImageFallback(event, item.fallback || LOCAL_FALLBACK_IMAGES[0])}
-                        />
-                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
-                          <span className="text-[8px] text-white font-bold uppercase tracking-widest truncate">{item.title}</span>
-                        </div>
-                        {item.type === 'property' && (
-                          <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-purple-600 text-white text-[6px] font-bold uppercase tracking-tighter rounded-md shadow-lg">
-                            Жилье
-                          </div>
-                        )}
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
-                
-                <div className="pt-8 border-t border-black/5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredObjects.map(obj => (
-                      <motion.div 
-                        key={obj.id}
-                        onClick={() => setSelectedObject(obj)}
-                        className="group cursor-pointer bg-white rounded-3xl overflow-hidden border border-black/5 hover:shadow-xl transition-all"
-                      >
-                        <div className="aspect-video relative overflow-hidden">
-                          <img src={obj.image_url} alt={obj.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" referrerPolicy="no-referrer" />
-                        </div>
-                        <div className="p-6">
-                          <h3 className="text-lg font-serif mb-2">{obj.name}</h3>
-                          <p className="text-xs opacity-60 line-clamp-2 mb-4">{obj.description}</p>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm font-bold">₽{obj.price_per_night} / {t.night}</span>
-                            <div className="flex items-center gap-1 text-amber-500">
-                              <Star size={14} fill="currentColor" />
-                              <span className="text-xs font-bold">4.9</span>
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
+                <ActiveOffersList
+                  objects={filteredObjects}
+                  regionTitle={CRIMEA_REGIONS.find((region) => region.id === selectedRegion)?.name || 'Крым'}
+                  dateLabel={startDate && endDate ? `${formatDate(startDate)} - ${formatDate(endDate)}` : 'Гибкие даты'}
+                  guestsLabel={searchGuests || '2 взрослых'}
+                  onSelectObject={(obj) => setSelectedObject(obj)}
+                />
               </motion.div>
             ) : (
               <motion.div
@@ -6237,48 +6140,13 @@ export default function App() {
                       ))}
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      {filteredObjects.map(obj => (
-                        <motion.div
-                          key={obj.id}
-                          onClick={() => setSelectedObject(obj)}
-                          className="p-6 bg-white rounded-2xl border border-black/5 hover:border-accent-purple/30 hover:shadow-lg transition-all cursor-pointer group"
-                        >
-                          <div className="flex justify-between items-start mb-2 gap-4">
-                            <div>
-                              <h3 className="text-xl font-serif group-hover:text-accent-purple transition-colors">{obj.name}</h3>
-                              <p className="text-[10px] uppercase font-bold opacity-40 tracking-widest mt-1">{obj.type}</p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <div className="text-lg font-bold">₽{obj.price_per_night}</div>
-                              <div className="text-[8px] uppercase font-bold opacity-40 tracking-widest">за {t.night}</div>
-                            </div>
-                          </div>
-                          <p className="text-sm opacity-60 mb-4 leading-relaxed">{obj.description}</p>
-                          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px] font-bold uppercase tracking-widest opacity-60">
-                            <div className="flex items-center gap-2">
-                              <MapPin size={12} className="text-accent-purple" />
-                              {CRIMEA_REGIONS.find(r => r.id === obj.region)?.name || obj.region}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Utensils size={12} className="text-blue-500" />
-                              {t.distanceToSea}: {obj.distance_to_sea || '—'}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Car size={12} className="text-emerald-500" />
-                              {t.distanceToStop}: {obj.distance_to_stop || '—'}
-                            </div>
-                            <div className="flex items-center gap-2 ml-auto">
-                              <Star size={12} className="text-amber-500" fill="currentColor" />
-                              4.9
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                      {filteredObjects.length === 0 && (
-                        <div className="text-center py-10 opacity-40 text-[10px] uppercase font-bold tracking-widest">{t.noObjects}</div>
-                      )}
-                    </div>
+                    <ActiveOffersList
+                      objects={filteredObjects}
+                      regionTitle={selectedRegion ? (CRIMEA_REGIONS.find((region) => region.id === selectedRegion)?.name || 'Крым') : 'Крым'}
+                      dateLabel={startDate && endDate ? `${formatDate(startDate)} - ${formatDate(endDate)}` : 'Гибкие даты'}
+                      guestsLabel={searchGuests || '2 взрослых'}
+                      onSelectObject={(obj) => setSelectedObject(obj)}
+                    />
                   )}
                 </section>
               </motion.div>
