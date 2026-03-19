@@ -19,6 +19,10 @@ const resolvedDbPath = path.isAbsolute(configuredDbPath)
   : path.join(process.cwd(), configuredDbPath);
 const db = new Database(resolvedDbPath);
 let hasLoggedTourism403 = false;
+let hasLoggedPhotoAuthDenied = false;
+let hasLoggedPhotoNetworkIssue = false;
+let hasLoggedPhotoHttpIssue = false;
+let photoSearchBlockedUntil = 0;
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadsDir),
   filename: (_req, file, cb) => cb(null, `${Date.now()}${path.extname(file.originalname)}`),
@@ -305,8 +309,52 @@ type PhotosPayload = {
 const PHOTO_CACHE_TTL_MS = Number(process.env.PHOTO_CACHE_TTL_MS || 1000 * 60 * 60 * 24 * 7);
 const PHOTO_MIN_BYTES = Number(process.env.PHOTO_MIN_BYTES || 50_000);
 const PHOTO_SEMANTIC_SIZE = String(process.env.PHOTO_YANDEX_IMAGE_SIZE || "MEDIUM").toUpperCase();
+const EXTERNAL_FETCH_TIMEOUT_MS = Number(process.env.EXTERNAL_FETCH_TIMEOUT_MS || 10_000);
+const EXTERNAL_FETCH_RETRIES = Number(process.env.EXTERNAL_FETCH_RETRIES || 2);
 const regionPhotoCache = new Map<string, { updatedAt: number; payload: PhotosPayload }>();
 const regionPhotoInFlight = new Map<string, Promise<PhotosPayload>>();
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isRetryableNetworkError = (error: any) => {
+  const code = String(error?.cause?.code || error?.code || "");
+  return code === "ETIMEDOUT" || code === "ECONNRESET" || code === "ECONNREFUSED" || code === "EAI_AGAIN";
+};
+
+const fetchWithRetry = async (
+  input: string,
+  init: RequestInit,
+  options?: { timeoutMs?: number; retries?: number; retryStatuses?: number[]; retryDelayMs?: number },
+) => {
+  const timeoutMs = options?.timeoutMs ?? EXTERNAL_FETCH_TIMEOUT_MS;
+  const retries = Math.max(0, options?.retries ?? EXTERNAL_FETCH_RETRIES);
+  const retryStatuses = new Set(options?.retryStatuses ?? [429, 500, 502, 503, 504]);
+  const retryDelayMs = options?.retryDelayMs ?? 450;
+
+  let lastError: any = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(input, { ...init, signal: controller.signal });
+      clearTimeout(timer);
+      if (attempt < retries && retryStatuses.has(response.status)) {
+        await delay(retryDelayMs * (attempt + 1));
+        continue;
+      }
+      return response;
+    } catch (error) {
+      clearTimeout(timer);
+      lastError = error;
+      if (attempt < retries && isRetryableNetworkError(error)) {
+        await delay(retryDelayMs * (attempt + 1));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError ?? new Error("fetchWithRetry failed");
+};
 
 const regionNameToId: Record<string, string> = {
   "ялта": "yalta",
@@ -510,34 +558,66 @@ const extractYandexImageUrls = async (queryText: string) => {
   const apiKey = getConfig("YANDEX_SEARCH_API_KEY") || getYandexApiKey();
   const folderId = getYandexFolderId();
   if (!apiKey || !folderId) return [];
+  if (Date.now() < photoSearchBlockedUntil) return [];
 
-  const response = await fetch("https://searchapi.api.cloud.yandex.net/v2/image/search", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Api-Key ${apiKey}`,
-    },
-    body: JSON.stringify({
-      folderId,
-      query: {
-        queryText,
-        searchType: "SEARCH_TYPE_RU",
+  try {
+    const response = await fetchWithRetry(
+      "https://searchapi.api.cloud.yandex.net/v2/image/search",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Api-Key ${apiKey}`,
+        },
+        body: JSON.stringify({
+          folderId,
+          query: {
+            queryText,
+            searchType: "SEARCH_TYPE_RU",
+          },
+          imageSpec: {
+            imageSize: PHOTO_SEMANTIC_SIZE,
+          },
+          docsOnPage: 20,
+          page: 0,
+        }),
       },
-      imageSpec: {
-        imageSize: PHOTO_SEMANTIC_SIZE,
-      },
-      docsOnPage: 20,
-      page: 0,
-    }),
-  });
+      { timeoutMs: EXTERNAL_FETCH_TIMEOUT_MS, retries: EXTERNAL_FETCH_RETRIES, retryDelayMs: 550 },
+    );
 
-  if (!response.ok) return [];
-  const payload = await response.json().catch(() => null);
-  const rawData = typeof payload?.rawData === "string" ? payload.rawData : "";
-  const xml = decodeRawDataToXml(rawData);
-  if (!xml) return [];
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        if (!hasLoggedPhotoAuthDenied) {
+          console.warn(`[photos] Yandex image search auth denied (${response.status}). Using local fallback.`);
+          hasLoggedPhotoAuthDenied = true;
+        }
+        photoSearchBlockedUntil = Date.now() + 6 * 60 * 60 * 1000;
+        return [];
+      }
+      if (!hasLoggedPhotoHttpIssue) {
+        console.warn(`[photos] Yandex image search returned ${response.status}. Using local fallback.`);
+        hasLoggedPhotoHttpIssue = true;
+      }
+      photoSearchBlockedUntil = Date.now() + 5 * 60 * 1000;
+      return [];
+    }
 
-  return parseImageLinksFromXml(xml);
+    const payload = await response.json().catch(() => null);
+    const rawData = typeof payload?.rawData === "string" ? payload.rawData : "";
+    const xml = decodeRawDataToXml(rawData);
+    if (!xml) return [];
+
+    hasLoggedPhotoNetworkIssue = false;
+    return parseImageLinksFromXml(xml);
+  } catch (error: any) {
+    if (!hasLoggedPhotoNetworkIssue) {
+      const code = String(error?.cause?.code || error?.code || "NETWORK_ERROR");
+      console.warn(`[photos] Yandex image search network error (${code}). Using local fallback.`);
+      hasLoggedPhotoNetworkIssue = true;
+    }
+    photoSearchBlockedUntil = Date.now() + 3 * 60 * 1000;
+    return [];
+  }
 };
 
 const downloadImageToCache = async (imageUrl: string) => {
@@ -620,8 +700,9 @@ const buildPhotosPayload = async (query: string): Promise<PhotosPayload> => {
       }
       if (imagesFromYandex.length >= 12) break;
     }
-  } catch (err) {
-    console.error("Yandex photo search error:", err);
+  } catch (err: any) {
+    const code = String(err?.cause?.code || err?.code || "UNKNOWN");
+    console.warn(`[photos] build payload fallback (${code}).`);
   }
 
   if (imagesFromYandex.length > 0) {
@@ -1491,7 +1572,11 @@ async function startServer() {
       requestUrl.searchParams.set('rspn', '1');
       requestUrl.searchParams.set('results', String(results));
 
-      const response = await fetch(requestUrl.toString());
+      const response = await fetchWithRetry(
+        requestUrl.toString(),
+        { method: 'GET', headers: { 'Accept': 'application/json' } },
+        { timeoutMs: EXTERNAL_FETCH_TIMEOUT_MS, retries: EXTERNAL_FETCH_RETRIES, retryDelayMs: 550 },
+      );
       if (!response.ok) {
         const status = response.status;
         const details = (await response.text().catch(() => '')).slice(0, 300);
